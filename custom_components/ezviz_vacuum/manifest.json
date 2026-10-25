@@ -1,9 +1,6 @@
 {
   "domain": "ezviz_vacuum",
   "name": "EZVIZ Robot Vacuum",
-  "after_dependencies": [
-    "ezviz"
-  ],
   "codeowners": [
     "@stefanelul2000"
   ],
@@ -16,7 +13,8 @@
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/stefanelul2000/ha-ezviz-vacuum/issues",
   "requirements": [
-    "pycryptodome==3.23.0"
+    "pycryptodome==3.23.0",
+    "pyezvizapi>=1.0.5.0"
   ],
-  "version": "1.1.1b1"
+  "version": "1.1.1b2"
 }

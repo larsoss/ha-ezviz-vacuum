@@ -1,4 +1,4 @@
-"""EZVIZ robot requests layered on the authenticated pyezviz client."""
+"""EZVIZ robot requests on the integration's own cloud session."""
 
 from __future__ import annotations
 
@@ -57,14 +57,12 @@ MAP_LAYERS = {
 
 
 class EzvizVacuumApi:
-    """Use the official integration's session without copying credentials."""
+    """Robot commands and reads; ``cloud`` is an ``EzvizCloud``."""
 
-    def __init__(self, client: Any) -> None:
-        self._client = client
+    def __init__(self, cloud: Any) -> None:
+        self._cloud = cloud
         # (serial, command group) pairs that need a model's alternative command.
         self._alternatives: set[tuple[str, str]] = set()
-        # Serials whose ``CleanCtrl`` wants an object payload instead of a string.
-        self._clean_ctrl_object: set[str] = set()
 
     def _with_alternative(
         self,
@@ -108,7 +106,7 @@ class EzvizVacuumApi:
         if command not in {"start", "resume", "pause", "stop"}:
             raise ValueError(f"Unsupported robot command: {command}")
 
-        def send(identifier: str, payload: Any = command) -> dict[str, Any]:
+        def send(identifier: str, payload: Any) -> dict[str, Any]:
             return self._iot_request(
                 serial,
                 endpoint="action",
@@ -117,24 +115,7 @@ class EzvizVacuumApi:
                 payload=payload,
             )
 
-        def send_ctrl() -> dict[str, Any]:
-            # Some models (RE4) refuse the plain string with "Incorrect request
-            # parameter" and want the object form that ``RechargeCtrl`` uses.
-            as_object = {"action": command, "source": "mobile"}
-            key = serial.upper()
-            if key in self._clean_ctrl_object:
-                return send("CleanCtrl", as_object)
-            try:
-                return send("CleanCtrl")
-            except EzvizVacuumApiError as err:
-                if isinstance(err, UnknownActionError) or "code 400" not in str(err):
-                    raise
-                result = send("CleanCtrl", as_object)
-                self._clean_ctrl_object.add(key)
-                return result
-
         return self._with_alternative(
-            serial, "clean", lambda: send("CleanControl"), send_ctrl
             serial,
             "clean",
             lambda: send("CleanControl", command),
@@ -269,11 +250,9 @@ class EzvizVacuumApi:
         )
 
     def client_diagnostics(self) -> dict[str, Any]:
-        """Return non-secret client capability and service-host information."""
-        token = getattr(self._client, "_token", None)
-        service_urls: dict[str, Any] = {}
-        if isinstance(token, dict) and isinstance(token.get("service_urls"), dict):
-            service_urls = token["service_urls"]
+        """Return non-secret library and service-host information."""
+        token = self._cloud.token()
+        service_urls = token.get("service_urls")
         version = "unknown"
         try:
             version = metadata.version("pyezvizapi")
@@ -281,19 +260,8 @@ class EzvizVacuumApi:
             pass
         return {
             "pyezvizapi_version": version,
-            "client_module": type(self._client).__module__,
-            "capabilities": {
-                name: hasattr(self._client, name)
-                for name in (
-                    "_api_get_pagelist",
-                    "_http_request",
-                    "_parse_json",
-                    "_request_json",
-                    "get_cam_key",
-                    "get_service_urls",
-                )
-            },
-            "service_urls": service_urls,
+            "api_host": token.get("api_url"),
+            "service_urls": service_urls if isinstance(service_urls, dict) else {},
         }
 
     def fetch_map_layer(
@@ -310,14 +278,11 @@ class EzvizVacuumApi:
         """
         if layer not in MAP_LAYERS:
             raise ValueError(f"Unknown map layer: {layer}")
-        session, api_url = self._session_and_host()
         params: dict[str, Any] = {"deviceSerial": serial.upper(), "mapId": int(map_id)}
         if version is not None:
             params["version"] = int(version)
-        response = session.post(
-            f"https://{api_url}/v3/sweeprobot/v3/rule/{layer}",
-            params=params,
-            timeout=getattr(self._client, "_timeout", 25),
+        response = self._cloud.request(
+            "POST", f"/v3/sweeprobot/v3/rule/{layer}", params=params
         )
         response.raise_for_status()
         result = response.json()
@@ -384,20 +349,19 @@ class EzvizVacuumApi:
             raise ValueError("Only GET and PUT are supported")
         if endpoint not in {"feature", "action"}:
             raise ValueError("Endpoint must be 'feature' or 'action'")
-        session, api_url = self._session_and_host()
-        url = (
-            f"https://{api_url}/v3/iot-feature/{endpoint}/"
+        path = (
+            f"/v3/iot-feature/{endpoint}/"
             f"{serial.upper()}/{resource}/{local_index}/{domain}/{identifier}"
         )
-        headers = dict(session.headers)
-        kwargs: dict[str, Any] = {
-            "headers": headers,
-            "timeout": getattr(self._client, "_timeout", 25),
-        }
         if method == "PUT":
-            headers["Content-Type"] = "application/json"
-            kwargs["data"] = json.dumps(payload, separators=(",", ":"))
-        response = session.request(method, url, **kwargs)
+            response = self._cloud.request(
+                method,
+                path,
+                data=json.dumps(payload, separators=(",", ":")),
+                headers={"Content-Type": "application/json"},
+            )
+        else:
+            response = self._cloud.request(method, path)
         try:
             body: Any = response.json()
         except ValueError:
@@ -414,21 +378,19 @@ class EzvizVacuumApi:
         json_body: Any = None,
         headers: dict[str, str] | None = None,
     ) -> dict[str, Any]:
-        """Send one request to the EZVIZ API host of the active session."""
+        """Send one request to the account's EZVIZ API host."""
         method = method.upper()
         if method not in {"GET", "POST", "PUT"}:
             raise ValueError("Only GET, POST and PUT are supported")
         if not path.startswith("/") or "://" in path:
             raise ValueError("Path must be relative to the EZVIZ API host")
-        session, api_url = self._session_and_host()
-        response = session.request(
+        response = self._cloud.request(
             method,
-            f"https://{api_url}{path}",
+            path,
             params=params,
             data=data,
-            json=json_body,
-            headers={str(k): str(v) for k, v in (headers or {}).items()} or None,
-            timeout=getattr(self._client, "_timeout", 25),
+            json_body=json_body,
+            headers={str(k): str(v) for k, v in (headers or {}).items()},
         )
         try:
             body: Any = response.json()
@@ -439,16 +401,6 @@ class EzvizVacuumApi:
             }
         return {"http_status": response.status_code, "response": body}
 
-    def _session_and_host(self) -> tuple[Any, str]:
-        session = getattr(self._client, "_session", None)
-        token = getattr(self._client, "_token", None)
-        if session is None or not isinstance(token, dict):
-            raise EzvizVacuumApiError("Active EZVIZ session is unavailable")
-        api_url = token.get("api_url")
-        if not api_url:
-            raise EzvizVacuumApiError("No API address in the active EZVIZ session")
-        return session, str(api_url)
-
     def _iot_request(
         self,
         serial: str,
@@ -458,19 +410,12 @@ class EzvizVacuumApi:
         identifier: str,
         payload: Any,
     ) -> dict[str, Any]:
-        session, api_url = self._session_and_host()
-
-        url = (
-            f"https://{api_url}/v3/iot-feature/{endpoint}/"
-            f"{serial.upper()}/SweepingRobot/0/{domain}/{identifier}"
-        )
-        headers = dict(session.headers)
-        headers["Content-Type"] = "application/json"
-        response = session.put(
-            url,
-            headers=headers,
+        response = self._cloud.request(
+            "PUT",
+            f"/v3/iot-feature/{endpoint}/"
+            f"{serial.upper()}/SweepingRobot/0/{domain}/{identifier}",
             data=json.dumps(payload, separators=(",", ":")),
-            timeout=getattr(self._client, "_timeout", 25),
+            headers={"Content-Type": "application/json"},
         )
         response.raise_for_status()
         result = response.json()

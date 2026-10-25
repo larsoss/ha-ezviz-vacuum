@@ -59,9 +59,9 @@ def _auth_base_url(token: dict[str, Any]) -> str:
 
 
 def _find_resource(
-    pagelist: dict[str, Any], serial: str, channel: int
+    device: dict[str, Any], serial: str, channel: int
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    resources = pagelist.get("resourceInfos") or []
+    resources = device.get("resourceInfos") or []
     resource = next(
         (
             item
@@ -75,26 +75,20 @@ def _find_resource(
     )
     if not isinstance(resource, dict):
         raise PyEzvizError("No robot video resource")
-    vtms = pagelist.get("VTM") or {}
+    vtms = device.get("VTM") or {}
     vtm = vtms.get(resource.get("resourceId")) if isinstance(vtms, dict) else None
     if not isinstance(vtm, dict):
         raise PyEzvizError("No VTM streaming server for the robot")
     return resource, vtm
 
 
-def _vtdu_token(client: Any) -> str:
-    token = getattr(client, "_token", None)
-    session = getattr(client, "_session", None)
-    if not isinstance(token, dict) or session is None:
-        raise PyEzvizError("Active EZVIZ session is unavailable")
+def _vtdu_token(cloud: Any) -> str:
+    token = cloud.token()
     session_id = token.get("session_id")
-    response = session.get(
+    payload = cloud.get_url(
         f"{_auth_base_url(token)}/vtdutoken2",
         params={"ssid": session_id, "sign": _session_sign(session_id)},
-        timeout=getattr(client, "_timeout", 25),
     )
-    response.raise_for_status()
-    payload = response.json()
     if payload.get("retcode") not in (0, "0"):
         raise PyEzvizError(f"VTDU server rejected the token: {payload.get('retcode')}")
     tokens = payload.get("tokens")
@@ -104,13 +98,13 @@ def _vtdu_token(client: Any) -> str:
 
 
 def build_cloud_stream(
-    client: Any, serial: str, channel: int = 1
+    cloud: Any, serial: str, channel: int = 1
 ) -> tuple[VtmStreamClient, dict[str, Any]]:
     """Build an unopened cloud stream and safe metadata."""
-    pagelist = client._api_get_pagelist(page_filter="VTM", limit=50)
-    if not isinstance(pagelist, dict):
-        raise PyEzvizError("EZVIZ did not return VTM metadata")
-    resource, vtm = _find_resource(pagelist, serial, channel)
+    device = cloud.device_infos(serial)
+    if not isinstance(device, dict) or not device:
+        raise PyEzvizError("EZVIZ did not return the robot's streaming details")
+    resource, vtm = _find_resource(device, serial, channel)
     host = vtm.get("externalIp") or vtm.get("domain") or vtm.get("internalIp")
     port = int(vtm.get("port") or 0)
     if not host or not 1 <= port <= 65535:
@@ -120,7 +114,7 @@ def build_cloud_stream(
         port,
         serial,
         str(resource.get("streamBizUrl") or ""),
-        _vtdu_token(client),
+        _vtdu_token(cloud),
         channel=channel,
     )
     return VtmStreamClient(stream_url, timeout=10), {
@@ -132,9 +126,9 @@ def build_cloud_stream(
     }
 
 
-def trace_cloud_stream(client: Any, serial: str) -> dict[str, Any]:
+def trace_cloud_stream(cloud: Any, serial: str) -> dict[str, Any]:
     """Open a short stream trace and return metadata only, never media bytes."""
-    stream, metadata = build_cloud_stream(client, serial)
+    stream, metadata = build_cloud_stream(cloud, serial)
     with stream:
         events = stream.trace_packets(max_packets=12)
         info = stream.stream_info
@@ -147,14 +141,14 @@ def trace_cloud_stream(client: Any, serial: str) -> dict[str, Any]:
 
 
 def capture_cloud_snapshot(
-    client: Any,
+    cloud: Any,
     serial: str,
     ffmpeg_path: str,
     *,
     duration_seconds: float = 3.5,
 ) -> bytes:
     """Capture one JPEG; the cloud video connection exists only during this call."""
-    stream, _metadata = build_cloud_stream(client, serial)
+    stream, _metadata = build_cloud_stream(cloud, serial)
     payloads: list[bytes] = []
     deadline = time.monotonic() + duration_seconds
     with stream:
@@ -170,7 +164,7 @@ def capture_cloud_snapshot(
         raise PyEzvizError("Robot camera did not return an image")
 
     candidates = [raw]
-    get_cam_key = getattr(client, "get_cam_key", None)
+    get_cam_key = getattr(cloud.client, "get_cam_key", None)
     if callable(get_cam_key):
         try:
             media_key = get_cam_key(serial)

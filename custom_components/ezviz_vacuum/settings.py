@@ -308,6 +308,13 @@ class RestPlanSetting(Setting):
         return "SweeperMgr", "RestPlan", {"plan": plan}
 
 
+def do_not_disturb(field: str) -> FirstAvailableSetting:
+    """Do-not-disturb field: ``RestPlan`` (RS20 Max) or ``RestMode`` (RE4)."""
+    return FirstAvailableSetting(
+        (RestPlanSetting(field), FieldSetting("SweeperMgr", "RestMode", field))
+    )
+
+
 @dataclass(frozen=True)
 class CleanPlanSetting(Setting):
     """A field of one cleaning schedule (``SweeperCleanTask/CleanPlan``)."""

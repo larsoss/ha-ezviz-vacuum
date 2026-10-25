@@ -8,10 +8,10 @@ from functools import partial
 from time import monotonic
 from typing import Any
 
-from homeassistant.config_entries import ConfigEntry, ConfigEntryState
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import (
-    ConfigEntryNotReady,
+    ConfigEntryAuthFailed,
     HomeAssistantError,
     ServiceValidationError,
 )
@@ -19,14 +19,15 @@ from homeassistant.helpers.update_coordinator import (
     DataUpdateCoordinator,
     UpdateFailed,
 )
+from pyezvizapi.exceptions import EzvizAuthTokenExpired
 
 from . import robot
 from .api import EzvizVacuumApi, EzvizVacuumApiError
+from .cloud import EzvizCloud
 from .cloud_camera import capture_cloud_snapshot, trace_cloud_stream
 from .const import (
     ACTIVE_SCAN_INTERVAL,
     CONF_SERIAL,
-    CONF_SOURCE_ENTRY_ID,
     DEFAULT_SCAN_INTERVAL,
     DEVICE_REFRESH_INTERVAL,
     DOMAIN,
@@ -36,33 +37,14 @@ from .maprender import render_svg
 from .settings import Setting, apply_write
 
 
-def find_api(runtime_data: Any) -> Any | None:
-    """Find the pyezviz client without depending on HA's private data class."""
-    candidates = (
-        runtime_data,
-        getattr(runtime_data, "coordinator", None),
-        getattr(runtime_data, "data", None),
-    )
-    for candidate in candidates:
-        if candidate is None:
-            continue
-        for attribute in ("api", "client", "ezviz_client"):
-            api = getattr(candidate, attribute, None)
-            if api is not None and hasattr(api, "get_device_infos"):
-                return api
-        if hasattr(candidate, "get_device_infos"):
-            return candidate
-    return None
-
-
 class EzvizVacuumCoordinator(DataUpdateCoordinator[dict[str, Any]]):
-    """Fetch robot data through the already authenticated EZVIZ client."""
+    """Fetch robot data through the integration's own EZVIZ session."""
 
     def __init__(
         self,
         hass: HomeAssistant,
         entry: ConfigEntry,
-        source_entry: ConfigEntry,
+        cloud: EzvizCloud,
     ) -> None:
         super().__init__(
             hass,
@@ -71,7 +53,7 @@ class EzvizVacuumCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             update_interval=DEFAULT_SCAN_INTERVAL,
         )
         self.entry = entry
-        self.source_entry = source_entry
+        self.cloud = cloud
         self.serial: str = entry.data.get(CONF_SERIAL, "")
         self.robot_api: EzvizVacuumApi | None = None
         self._device: dict[str, Any] | None = None
@@ -87,13 +69,8 @@ class EzvizVacuumCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.camera_snapshot: bytes | None = None
         self.camera_snapshot_updated: datetime | None = None
 
-    def _api(self) -> Any:
-        if self.source_entry.state is not ConfigEntryState.LOADED:
-            raise ConfigEntryNotReady("Official EZVIZ integration is not loaded")
-        api = find_api(getattr(self.source_entry, "runtime_data", None))
-        if api is None:
-            raise ConfigEntryNotReady("No active EZVIZ session found")
-        return api
+    def _api(self) -> EzvizCloud:
+        return self.cloud
 
     def _device_is_stale(self, task_name: str | None) -> bool:
         """Return whether the full device report should be fetched again.
@@ -108,9 +85,15 @@ class EzvizVacuumCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return True
         return monotonic() - self._device_fetched >= DEVICE_REFRESH_INTERVAL
 
-    async def _async_fetch_device(self, source_api: Any) -> tuple[str, dict[str, Any]]:
+    async def _async_fetch_device(
+        self, cloud: EzvizCloud
+    ) -> tuple[str, dict[str, Any]]:
         try:
-            raw = await self.hass.async_add_executor_job(source_api.get_device_infos)
+            raw = await self.hass.async_add_executor_job(cloud.device_infos)
+        except EzvizAuthTokenExpired as err:
+            raise ConfigEntryAuthFailed(
+                "The EZVIZ login has expired; please sign in again"
+            ) from err
         except Exception as err:
             raise UpdateFailed(f"EZVIZ read error: {err}") from err
         if not isinstance(raw, Mapping):
@@ -138,13 +121,14 @@ class EzvizVacuumCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         raise UpdateFailed("No EZVIZ robot vacuum found on the account")
 
     async def _async_update_data(self) -> dict[str, Any]:
-        source_api = self._api()
+        cloud = self._api()
         if self.serial == "" or self._device is None:
             # The serial is needed before the live task can be queried.
-            self.serial, self._device = await self._async_fetch_device(source_api)
+            self.serial, self._device = await self._async_fetch_device(cloud)
             self._device_fetched = monotonic()
 
-        self.robot_api = EzvizVacuumApi(source_api)
+        if self.robot_api is None:
+            self.robot_api = EzvizVacuumApi(cloud)
         task: dict[str, Any] = {}
         task_error: str | None = None
         try:
@@ -152,12 +136,16 @@ class EzvizVacuumCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self.robot_api.query_current_task,
                 self.serial,
             )
+        except EzvizAuthTokenExpired as err:
+            raise ConfigEntryAuthFailed(
+                "The EZVIZ login has expired; please sign in again"
+            ) from err
         except Exception as err:
             task_error = str(err)
 
         task_name = robot.current_task(task) if task else None
         if self._device_is_stale(task_name):
-            self.serial, self._device = await self._async_fetch_device(source_api)
+            self.serial, self._device = await self._async_fetch_device(cloud)
             self._device_fetched = monotonic()
         if task_name is not None:
             self._device_task = task_name
@@ -271,6 +259,11 @@ class EzvizVacuumCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
         except ValueError as err:
             raise ServiceValidationError(str(err)) from err
+        except EzvizAuthTokenExpired as err:
+            self.entry.async_start_reauth(self.hass)
+            raise HomeAssistantError(
+                "The EZVIZ login has expired; please sign in again"
+            ) from err
         except EzvizVacuumApiError as err:
             raise HomeAssistantError(f"EZVIZ rejected the command: {err}") from err
         except Exception as err:
@@ -382,18 +375,7 @@ class EzvizVacuumCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     ffmpeg_path,
                 )
             )
-        except ConfigEntryNotReady as err:
-            raise HomeAssistantError(str(err)) from err
         except Exception as err:
             raise HomeAssistantError(f"Could not capture a snapshot: {err}") from err
         self.camera_snapshot_updated = dt_util.utcnow()
         self.async_update_listeners()
-
-
-def get_source_entry(hass: HomeAssistant, entry: ConfigEntry) -> ConfigEntry:
-    """Resolve the official EZVIZ config entry."""
-    source_id = entry.data[CONF_SOURCE_ENTRY_ID]
-    source = hass.config_entries.async_get_entry(source_id)
-    if source is None:
-        raise ConfigEntryNotReady("Referenced EZVIZ integration not found")
-    return source

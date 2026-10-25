@@ -9,14 +9,23 @@ from typing import Any
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
-from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
+from homeassistant.exceptions import (
+    ConfigEntryAuthFailed,
+    ConfigEntryNotReady,
+    HomeAssistantError,
+    ServiceValidationError,
+)
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.service import async_register_admin_service
+from pyezvizapi.exceptions import EzvizAuthTokenExpired, PyEzvizError
 import voluptuous as vol
 
 from . import robot
+from .cloud import EzvizCloud
 from .const import (
+    CONF_LEGACY_SOURCE_ENTRY_ID,
     CONF_SERIAL,
+    CONF_TOKEN,
     DOMAIN,
     SERVICE_API_REQUEST,
     SERVICE_CAMERA_DIAGNOSTICS,
@@ -25,7 +34,7 @@ from .const import (
     SERVICE_MAP_DIAGNOSTICS,
     SERVICE_REFRESH_CAMERA,
 )
-from .coordinator import EzvizVacuumCoordinator, get_source_entry
+from .coordinator import EzvizVacuumCoordinator
 from .helpers import feature
 from .mapdata import decode_path
 
@@ -74,9 +83,49 @@ def _sanitize(value: Any) -> Any:
     return value
 
 
+async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Move entries off the official EZVIZ integration's session.
+
+    Version 1 entries have no login of their own; setup then asks the user to
+    sign in once (re-authentication) and keeps every entity.
+    """
+    if entry.version > 2:
+        return False
+    if entry.version == 1:
+        data = {
+            key: value
+            for key, value in entry.data.items()
+            if key != CONF_LEGACY_SOURCE_ENTRY_ID
+        }
+        hass.config_entries.async_update_entry(entry, data=data, version=2)
+    return True
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: EzvizVacuumConfigEntry) -> bool:
     """Set up one robot from a config entry."""
-    coordinator = EzvizVacuumCoordinator(hass, entry, get_source_entry(hass, entry))
+    token = entry.data.get(CONF_TOKEN)
+    if not isinstance(token, Mapping) or not token.get("session_id"):
+        raise ConfigEntryAuthFailed("Sign in to your EZVIZ account")
+
+    def save_token(new_token: dict[str, Any]) -> None:
+        """Store a renewed session; called from the client's worker thread."""
+        hass.loop.call_soon_threadsafe(_store_token, hass, entry, new_token)
+
+    cloud = await hass.async_add_executor_job(
+        partial(EzvizCloud.from_token, dict(token), on_token_updated=save_token)
+    )
+    try:
+        await hass.async_add_executor_job(cloud.refresh)
+    except EzvizAuthTokenExpired as err:
+        raise ConfigEntryAuthFailed(
+            "The EZVIZ login has expired; please sign in again"
+        ) from err
+    except PyEzvizError as err:
+        raise ConfigEntryNotReady(f"Could not reach the EZVIZ cloud: {err}") from err
+    except Exception as err:
+        raise ConfigEntryNotReady(f"Could not reach the EZVIZ cloud: {err}") from err
+
+    coordinator = EzvizVacuumCoordinator(hass, entry, cloud)
     await coordinator.async_config_entry_first_refresh()
     entry.runtime_data = coordinator
     _migrate_to_serial(hass, entry, coordinator.serial)
@@ -84,6 +133,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: EzvizVacuumConfigEntry) 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     _register_services(hass)
     return True
+
+
+def _store_token(
+    hass: HomeAssistant, entry: ConfigEntry, token: dict[str, Any]
+) -> None:
+    if entry.data.get(CONF_TOKEN) != token:
+        hass.config_entries.async_update_entry(
+            entry, data={**entry.data, CONF_TOKEN: token}
+        )
 
 
 def _migrate_to_serial(hass: HomeAssistant, entry: ConfigEntry, serial: str) -> None:
@@ -299,6 +357,8 @@ async def async_unload_entry(
 ) -> bool:
     """Unload a robot."""
     unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if unloaded:
+        await hass.async_add_executor_job(entry.runtime_data.cloud.close)
     if unloaded and len(hass.config_entries.async_entries(DOMAIN)) <= 1:
         for name in (
             SERVICE_INSPECT,
