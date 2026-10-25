@@ -291,7 +291,12 @@ class ModelVariantTests(unittest.TestCase):
         self.api.clean_control("AB1234567", "start")
         self.api.clean_control("AB1234567", "pause")
         self.assertEqual(self.names(), ["CleanControl", "CleanCtrl", "CleanCtrl"])
-        self.assertEqual(json.loads(self.client._session.calls[-1]["data"]), "pause")
+        # CleanControl takes the bare command; CleanCtrl (RS2, RE4) an object.
+        self.assertEqual(json.loads(self.client._session.calls[0]["data"]), "start")
+        self.assertEqual(
+            json.loads(self.client._session.calls[-1]["data"]),
+            {"action": "pause", "source": "mobile"},
+        )
 
     def test_recharge_falls_back_to_recharge_ctrl(self) -> None:
         self.api.recharge_control("AB1234567", "start")

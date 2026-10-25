@@ -26,7 +26,12 @@ ROOM_NAMES = {
     "#@ShuF#": "Study",
     "#@YangT#": "Balcony",
     "#@YiMJ#": "Closet",
+    "#@XiYF#": "Laundry Room",
+    "#@FangJ#": "Room",
 }
+
+# A preset code, optionally with a trailing index (e.g. "#@FangJ#4").
+_PRESET_NAME = re.compile(r"^(#@\w+#)(\d*)$")
 
 
 def task_data(task: Mapping[str, Any] | None) -> Mapping[str, Any]:
@@ -120,11 +125,25 @@ def map_name(device: Mapping[str, Any] | None, map_id: int | None) -> str:
 
 
 def room_name(raw_name: Any, room_id: Any) -> str:
-    """Translate a robot room name; preset codes become English names."""
+    """Translate a robot room name into a readable name.
+
+    Rooms are named by a preset code (``#@CanT#`` -> Dining Room), a preset
+    code with a trailing index (``#@FangJ#4`` -> Room 4), or free text the
+    user typed in the app (returned as-is). An unknown preset code falls back
+    to ``Room N`` rather than surfacing the raw ``#@...#`` wrapper.
+    """
     name = str(raw_name or "").strip()
     if not name:
         return f"Room {room_id}"
-    return ROOM_NAMES.get(name, name)
+    if name in ROOM_NAMES:
+        return ROOM_NAMES[name]
+    match = _PRESET_NAME.match(name)
+    if match:
+        base, index = ROOM_NAMES.get(match.group(1)), match.group(2)
+        if base:
+            return f"{base} {index}" if index else base
+        return f"Room {index or room_id}"
+    return name
 
 
 def rooms(
@@ -135,12 +154,27 @@ def rooms(
     for item in _as_list(info.get("mapList") if isinstance(info, Mapping) else None):
         if not isinstance(item, Mapping) or _map_id(item.get("mapID")) != map_id:
             continue
-        return [
+        found = [
             (str(region["ID"]), room_name(region.get("name"), region["ID"]))
             for region in _as_list(item.get("regionList"))
             if isinstance(region, Mapping)
             and region.get("regionType") == "room"
             and region.get("ID") is not None
+        ]
+        if found:
+            return found
+    # Fallback: some models (e.g. the RE4 / CS-RE4P-PWT) don't report
+    # RegionBasicInfo at all — their rooms live in RoomCustomCleanCfg instead,
+    # keyed `roomID`. No name is carried there, so room_name() falls back to
+    # "Room N". The RoomBasicProperty feature holds only a capability flag
+    # (a bare `true`), not the user-assigned names.
+    for item in _as_list(feature(device, "SweeperMapMgr", "RoomCustomCleanCfg")):
+        if not isinstance(item, Mapping) or _map_id(item.get("mapID")) != map_id:
+            continue
+        return [
+            (str(room["roomID"]), room_name(room.get("name"), room["roomID"]))
+            for room in _as_list(item.get("room"))
+            if isinstance(room, Mapping) and room.get("roomID") is not None
         ]
     return []
 

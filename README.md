@@ -3,7 +3,7 @@
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz/docs/faq/custom_repositories)
 [![Version](https://img.shields.io/github/v/release/stefanelul2000/ha-ezviz-vacuum)](https://github.com/stefanelul2000/ha-ezviz-vacuum/releases)
 ![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2026.7%2B-18BCF2)
-[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+[![License](https://img.shields.io/github/license/stefanelul2000/ha-ezviz-vacuum)](https://github.com/stefanelul2000/ha-ezviz-vacuum/blob/main/LICENSE)
 [![Tests](https://github.com/stefanelul2000/ha-ezviz-vacuum/actions/workflows/tests.yml/badge.svg)](https://github.com/stefanelul2000/ha-ezviz-vacuum/actions/workflows/tests.yml)
 [![Validate](https://github.com/stefanelul2000/ha-ezviz-vacuum/actions/workflows/validate.yml/badge.svg)](https://github.com/stefanelul2000/ha-ezviz-vacuum/actions/workflows/validate.yml)
 
@@ -12,11 +12,11 @@ Assistant: a live map, room cleaning, every cleaning setting the app offers,
 consumables and history.
 
 <p align="center">
-  <img src="docs/dashboard.png" alt="A Home Assistant dashboard built on the integration: the robot with its live map, cleaning settings and consumables">
+  <img src="https://raw.githubusercontent.com/stefanelul2000/ha-ezviz-vacuum/main/docs/dashboard.png" alt="A Home Assistant dashboard built on the integration: the robot with its live map, cleaning settings and consumables">
 </p>
 
 <p align="center">
-  <img src="docs/settings.png" alt="Base-station, schedule, smart-feature and statistics entities on a dashboard">
+  <img src="https://raw.githubusercontent.com/stefanelul2000/ha-ezviz-vacuum/main/docs/settings.png" alt="Base-station, schedule, smart-feature and statistics entities on a dashboard">
   <br><sub>The dashboard is the author's own (button-card, Mushroom and card-mod); the integration provides the entities and the map image.</sub>
 </p>
 
@@ -61,7 +61,7 @@ a different app plugin and are unknown.
 
 Settings only appear when the robot reports them, so a model without, say,
 carpet settings simply won't get those switches. The comparison behind this
-table is in [docs/models.md](docs/models.md). Untested means the integration was
+table is in [docs/models.md](https://github.com/stefanelul2000/ha-ezviz-vacuum/blob/main/docs/models.md). Untested means the integration was
 built from what the EZVIZ app sends to that model, without the robot itself.
 
 **Have a robot that isn't marked tested?** Please
@@ -230,7 +230,7 @@ reports that it changed. The map follows the robot every 10 seconds while it
 cleans. Area outside the rooms, often laser reflections, is drawn faintly.
 
 <p align="center">
-  <img src="docs/robot-card.png" alt="The map image entity with rooms, the dock and room buttons" width="420">
+  <img src="https://raw.githubusercontent.com/stefanelul2000/ha-ezviz-vacuum/main/docs/robot-card.png" alt="The map image entity with rooms, the dock and room buttons" width="420">
 </p>
 
 Show it with a picture entity card:
@@ -295,7 +295,7 @@ ruff format --check custom_components tests
 
 The tests cover the API client, settings, robot state and map decoding, and
 use synthetic data only. Every push runs HACS validation, Hassfest, Ruff, the
-tests on Python 3.13 and 3.14, and a check that every translation has the same
+tests on Python 3.14, and a check that every translation has the same
 keys as English. Publishing a release checks that the tag matches the manifest
 version and attaches a zip of the integration.
 
@@ -306,5 +306,5 @@ Based on
 The camera transport code is derived from
 [pyEzvizApi](https://github.com/RenierM26/pyEzvizApi).
 
-Apache-2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE). This project is not
+Apache-2.0. See [LICENSE](https://github.com/stefanelul2000/ha-ezviz-vacuum/blob/main/LICENSE) and [NOTICE](https://github.com/stefanelul2000/ha-ezviz-vacuum/blob/main/NOTICE). This project is not
 affiliated with or endorsed by EZVIZ. Use it at your own risk.

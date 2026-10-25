@@ -70,4 +70,10 @@ class RobotBinarySensor(RobotEntity, BinarySensorEntity):
     def is_on(self) -> bool | None:
         """Return the reported value."""
         value = self.entity_description.value_fn(self.coordinator.data)
-        return value if isinstance(value, bool) else None
+        if isinstance(value, bool):
+            return value
+        # Some models report these flags as 0/1 integers rather than JSON
+        # booleans (e.g. the RE4's isOnBasestation), so coerce numerics too.
+        if isinstance(value, (int, float)):
+            return bool(value)
+        return None

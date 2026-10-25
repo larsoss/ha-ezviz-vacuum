@@ -41,6 +41,29 @@ class MapTests(unittest.TestCase):
         self.assertEqual(robot.room_name("Office", 4), "Office")
         self.assertEqual(robot.room_name("", 4), "Room 4")
 
+    def test_preset_names_with_index(self) -> None:
+        self.assertEqual(robot.room_name("#@FangJ#4", 4), "Room 4")
+        self.assertEqual(robot.room_name("#@KeT#2", 9), "Living Room 2")
+        self.assertEqual(robot.room_name("#@Unknown#", 5), "Room 5")
+
+    def test_rooms_fall_back_to_room_clean_config(self) -> None:
+        # RE4: no RegionBasicInfo, rooms only in RoomCustomCleanCfg.
+        device = {
+            "FEATURE_INFO": {
+                "0": {
+                    "SweepingRobot": {
+                        "SweeperMapMgr": {
+                            "RoomCustomCleanCfg": [
+                                {"mapID": 2, "room": [{"roomID": 0}, {"roomID": 3}]}
+                            ]
+                        }
+                    }
+                }
+            }
+        }
+        self.assertEqual(robot.rooms(device, 2), [("0", "Room 0"), ("3", "Room 3")])
+        self.assertEqual(robot.rooms(device, 4), [])
+
     def test_room_clean_configs_for_map(self) -> None:
         configs = robot.room_clean_configs(fixtures.device(), 2)
         self.assertEqual([room["roomID"] for room in configs], [8, 9])

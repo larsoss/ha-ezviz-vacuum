@@ -128,8 +128,9 @@ class EzvizVacuumVacuum(RobotEntity, StateVacuumEntity):
         device = self.coordinator.data.get("device", {})
         map_id = robot.active_map_id(device, self.coordinator.data.get("task"))
         group = robot.map_name(device, map_id)
+        names = self.coordinator.room_names
         return [
-            Segment(id=room_id, name=name, group=group)
+            Segment(id=room_id, name=names.get(int(room_id), name), group=group)
             for room_id, name in robot.rooms(device, map_id)
         ]
 

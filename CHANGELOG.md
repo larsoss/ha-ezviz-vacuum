@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.1.1b1 (beta)
+
+RE4 support, found and tested on real RE4 hardware by @RBrNx (#3, #4).
+
+- Start, pause and stop work on robots that use `CleanCtrl` (RE4); they
+  take an object payload, not a bare command (#5).
+- Rooms are read from the room cleaning settings when the robot does not
+  report its room list, so room cleaning works on the RE4.
+- Room names come from the map's room layer, so the RE4 shows real names
+  instead of "Room N". Preset names with a number (`Room 4`) and the laundry
+  room are translated.
+- The "On base station" sensor accepts robots that report it as 0/1.
+- The cleaning path is drawn at the right size on robots that store it at
+  ten times the map's resolution; the scale is detected from the map itself.
+
 ## 1.1.0
 
 The integration now signs in to EZVIZ on its own instead of borrowing the

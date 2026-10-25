@@ -101,8 +101,9 @@ class EzvizVacuumApi:
     def clean_control(self, serial: str, command: str) -> dict[str, Any]:
         """Start, resume, pause or stop cleaning.
 
-        Most models use ``CleanControl``; the RS2 made by EZVIZ's manufacturer
-        calls it ``CleanCtrl`` with the same values.
+        Most models use ``CleanControl`` with the bare command string; the RS2
+        and RE4 made by EZVIZ's manufacturer use ``CleanCtrl`` with an object
+        payload instead (the same shape as ``RechargeCtrl``).
         """
         if command not in {"start", "resume", "pause", "stop"}:
             raise ValueError(f"Unsupported robot command: {command}")
@@ -134,6 +135,10 @@ class EzvizVacuumApi:
 
         return self._with_alternative(
             serial, "clean", lambda: send("CleanControl"), send_ctrl
+            serial,
+            "clean",
+            lambda: send("CleanControl", command),
+            lambda: send("CleanCtrl", {"action": command, "source": "mobile"}),
         )
 
     def recharge_control(self, serial: str, command: str) -> dict[str, Any]:
