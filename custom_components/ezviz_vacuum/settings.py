@@ -93,6 +93,50 @@ class FieldSetting(Setting):
         return self.domain, self.identifier, payload
 
 
+@dataclass(frozen=True)
+class FlagFieldSetting(FieldSetting):
+    """A field the robot reports as 0/1 but the cloud accepts only as true/false."""
+
+    def read(self, device: Any, task: Any = None) -> Any:
+        value = super().read(device, task)
+        if value is None or isinstance(value, bool):
+            return value
+        if value in (0, 1):
+            return bool(value)
+        return None
+
+
+@dataclass(frozen=True)
+class FirstAvailableSetting(Setting):
+    """One option that different models store in different features.
+
+    Reads and writes use the first variant the robot reports.
+    """
+
+    options: tuple[Setting, ...]
+
+    def _pick(self, device: Any, task: Any = None) -> Setting:
+        for option in self.options:
+            if option.available(device, task):
+                return option
+        return self.options[0]
+
+    def read(self, device: Any, task: Any = None) -> Any:
+        return self._pick(device, task).read(device, task)
+
+    def available(self, device: Any, task: Any = None) -> bool:
+        return any(option.available(device, task) for option in self.options)
+
+    def write(self, device: Any, task: Any, value: Any) -> Write:
+        return self._pick(device, task).write(device, task, value)
+
+    def action(self, device: Any, task: Any, value: Any) -> Write | None:
+        return self._pick(device, task).action(device, task, value)
+
+    def fallback_action(self, device: Any, task: Any, value: Any) -> Write | None:
+        return self._pick(device, task).fallback_action(device, task, value)
+
+
 def _global_clean_cfg(device: Any, map_id: Any) -> Mapping[str, Any] | None:
     """Return the RE7 Edge's ``SweeperMapMgr/GlobalCleanCfg`` for a map."""
     value = feature(device, "SweeperMapMgr", "GlobalCleanCfg")

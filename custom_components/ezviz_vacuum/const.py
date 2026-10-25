@@ -3,12 +3,10 @@
 from datetime import timedelta
 
 DOMAIN = "ezviz_vacuum"
+SOURCE_DOMAIN = "ezviz"
 
+CONF_SOURCE_ENTRY_ID = "source_entry_id"
 CONF_SERIAL = "serial"
-# The EZVIZ session (session ID, refresh ID, API host); never the password.
-CONF_TOKEN = "token"
-# Version 1 entries borrowed the official EZVIZ integration's session.
-CONF_LEGACY_SOURCE_ENTRY_ID = "source_entry_id"
 
 DEFAULT_SCAN_INTERVAL = timedelta(seconds=30)
 # Polling while the robot cleans or returns, so the map path follows it.
@@ -37,6 +35,7 @@ WRITABLE_FEATURES: frozenset[tuple[str, str]] = frozenset(
         ("SweeperCleanTask", "RotatingBrushSelfCleanSwitch"),
         ("SweeperCleanTask", "SweepMopMode"),
         ("SweeperCleanTask", "CarpetCleanCfg"),
+        ("SweeperCleanTask", "CarpetTurboCleanSwitch"),
         ("SweeperCleanTask", "WashMopCfg"),
         ("SweeperCleanTask", "DryMopDuration"),
         ("SweeperCleanTask", "ParticulateCleanEnhanceCfg"),

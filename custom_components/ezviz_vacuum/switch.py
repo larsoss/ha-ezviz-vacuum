@@ -15,6 +15,8 @@ from .entity import RobotSettingEntity
 from .settings import (
     CleanPlanSetting,
     FieldSetting,
+    FirstAvailableSetting,
+    FlagFieldSetting,
     RestPlanSetting,
     Setting,
     clean_plans,
@@ -80,7 +82,15 @@ SWITCHES: Final[tuple[RobotSwitchDescription, ...]] = (
         key="carpet_boost",
         translation_key="carpet_boost",
         icon="mdi:fan-plus",
-        setting=FieldSetting("SweeperCleanTask", "CarpetCleanCfg", "turboClean"),
+        setting=FirstAvailableSetting(
+            (
+                FieldSetting("SweeperCleanTask", "CarpetCleanCfg", "turboClean"),
+                # RE4: the same option, stored as a 0/1 flag.
+                FlagFieldSetting(
+                    "SweeperCleanTask", "CarpetTurboCleanSwitch", "enabled"
+                ),
+            )
+        ),
     ),
     RobotSwitchDescription(
         key="carpet_extra_clean",
