@@ -43,6 +43,50 @@ class FieldSettingTests(unittest.TestCase):
         self.assertFalse(setting.available(fixtures.device()))
 
 
+class CarpetBoostTests(unittest.TestCase):
+    """Carpet boost lives in CarpetCleanCfg (RS20) or CarpetTurboCleanSwitch (RE4)."""
+
+    setting = settings.FirstAvailableSetting(
+        (
+            settings.FieldSetting("SweeperCleanTask", "CarpetCleanCfg", "turboClean"),
+            settings.FlagFieldSetting(
+                "SweeperCleanTask", "CarpetTurboCleanSwitch", "enabled"
+            ),
+        )
+    )
+
+    @staticmethod
+    def re4(enabled: int) -> dict:
+        return {
+            "FEATURE_INFO": {
+                "0": {
+                    "SweepingRobot": {
+                        "SweeperCleanTask": {
+                            "CarpetTurboCleanSwitch": {"enabled": enabled}
+                        }
+                    }
+                }
+            }
+        }
+
+    def test_rs20_uses_carpet_clean_cfg(self) -> None:
+        self.assertIs(self.setting.read(fixtures.device()), True)
+        domain, identifier, _ = self.setting.write(fixtures.device(), None, False)
+        self.assertEqual(identifier, "CarpetCleanCfg")
+
+    def test_re4_reads_flag_and_writes_boolean(self) -> None:
+        self.assertIs(self.setting.read(self.re4(1)), True)
+        self.assertIs(self.setting.read(self.re4(0)), False)
+        domain, identifier, payload = self.setting.write(self.re4(1), None, False)
+        self.assertEqual(
+            (domain, identifier), ("SweeperCleanTask", "CarpetTurboCleanSwitch")
+        )
+        self.assertEqual(payload, {"enabled": False})
+
+    def test_unavailable_without_either(self) -> None:
+        self.assertFalse(self.setting.available({}))
+
+
 class ScalarSettingTests(unittest.TestCase):
     """Plain values are sent as they are."""
 

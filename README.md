@@ -125,7 +125,7 @@ Cliff detection is deliberately not exposed.
 - Several robots on one Home Assistant; every service takes an optional
   serial.
 - An on-demand snapshot from the robot's camera.
-- Interface in English, German, Spanish, French, Italian and Polish.
+- Interface in English, German, Spanish, French, Italian, Dutch and Polish.
 
 ## Requirements
 

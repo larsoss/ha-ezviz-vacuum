@@ -7,6 +7,22 @@
         "description": "Deze integratie gebruikt de actieve sessie van de officiële EZVIZ-integratie. Kies het EZVIZ-account waaraan de robot is gekoppeld.",
         "data": {
           "source_entry_id": "EZVIZ-account"
+        "title": "Aanmelden bij EZVIZ",
+        "description": "Meld je aan met het account waaraan je robotstofzuiger in de EZVIZ-app is toegevoegd. Het wachtwoord wordt één keer gebruikt om aan te melden en wordt niet opgeslagen.",
+        "data": {
+          "username": "E-mailadres of telefoonnummer",
+          "password": "Wachtwoord",
+          "url": "Server"
+        },
+        "data_description": {
+          "url": "Laat de standaardwaarde staan, tenzij je account op de Russische server staat of je een ander adres hebt gekregen; andere regio's worden automatisch gevonden."
+        }
+      },
+      "sms_code": {
+        "title": "Verificatiecode",
+        "description": "EZVIZ heeft een verificatiecode gestuurd naar het telefoonnummer of e-mailadres van het account. Vul deze in om het aanmelden af te ronden.",
+        "data": {
+          "sms_code": "Code"
         }
       },
       "robot": {
@@ -22,6 +38,32 @@
       "ezviz_not_configured": "Stel eerst de officiële EZVIZ-integratie in.",
       "ezviz_not_loaded": "De officiële EZVIZ-integratie is niet geladen of kan de apparaten niet ophalen. Laad de integratie opnieuw en probeer het nog eens.",
       "no_robots": "Er zijn geen robotstofzuigers op dit EZVIZ-account gevonden die nog niet zijn geconfigureerd."
+      },
+      "reauth_confirm": {
+        "title": "Opnieuw aanmelden bij EZVIZ",
+        "description": "De EZVIZ-sessie voor {robot} is verlopen of nog niet ingesteld. Meld je opnieuw aan; je entiteiten en instellingen blijven behouden.",
+        "data": {
+          "username": "E-mailadres of telefoonnummer",
+          "password": "Wachtwoord",
+          "url": "Server"
+        },
+        "data_description": {
+          "url": "Laat de standaardwaarde staan, tenzij je account op de Russische server staat of je een ander adres hebt gekregen; andere regio's worden automatisch gevonden."
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Onjuist e-mailadres, telefoonnummer of wachtwoord.",
+      "invalid_code": "De verificatiecode is niet geldig. Probeer het opnieuw.",
+      "user_locked": "EZVIZ heeft dit account na te veel pogingen geblokkeerd. Probeer het later opnieuw.",
+      "cannot_connect": "Kan de EZVIZ-cloud niet bereiken. Controleer de server en je verbinding.",
+      "unknown": "Onverwachte fout. Bekijk de logboeken."
+    },
+    "abort": {
+      "already_configured": "Deze robot is al geconfigureerd.",
+      "no_robots": "Er zijn geen robotstofzuigers op dit EZVIZ-account gevonden die nog niet zijn geconfigureerd.",
+      "cannot_connect": "Aangemeld, maar de apparaten van het account konden niet worden gelezen. Probeer het opnieuw.",
+      "reauth_successful": "Opnieuw aangemeld. De robot wordt nu herladen."
     }
   },
   "entity": {

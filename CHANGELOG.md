@@ -1,8 +1,9 @@
 # Changelog
 
-## 1.1.1b1 (beta)
+## 1.1.1b2 (beta)
 
-RE4 support, found and tested on real RE4 hardware by @RBrNx (#3, #4).
+RE4 support, found and tested on real RE4 hardware by @RBrNx (#3, #4) and
+@larsoss (#5, #6).
 
 - Start, pause and stop work on robots that use `CleanCtrl` (RE4); they
   take an object payload, not a bare command (#5).
@@ -14,6 +15,8 @@ RE4 support, found and tested on real RE4 hardware by @RBrNx (#3, #4).
 - The "On base station" sensor accepts robots that report it as 0/1.
 - The cleaning path is drawn at the right size on robots that store it at
   ten times the map's resolution; the scale is detected from the map itself.
+- Carpet boost works on the RE4, which stores it as a 0/1 flag (#6).
+- Dutch translation (#6).
 
 ## 1.1.0
 
