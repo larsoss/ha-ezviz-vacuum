@@ -1,0 +1,404 @@
+{
+  "title": "EZVIZ robotstofzuiger",
+  "config": {
+    "step": {
+      "user": {
+        "title": "EZVIZ robotstofzuiger koppelen",
+        "description": "Deze integratie gebruikt de actieve sessie van de officiële EZVIZ-integratie. Kies het EZVIZ-account waaraan de robot is gekoppeld.",
+        "data": {
+          "source_entry_id": "EZVIZ-account"
+        }
+      },
+      "robot": {
+        "title": "Kies de robot",
+        "description": "Dit account bevat meerdere robotstofzuigers. Kies welke je wilt toevoegen. Herhaal de installatie om de andere toe te voegen.",
+        "data": {
+          "serial": "Robot"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "Deze robot is al geconfigureerd.",
+      "ezviz_not_configured": "Stel eerst de officiële EZVIZ-integratie in.",
+      "ezviz_not_loaded": "De officiële EZVIZ-integratie is niet geladen of kan de apparaten niet ophalen. Laad de integratie opnieuw en probeer het nog eens.",
+      "no_robots": "Er zijn geen robotstofzuigers op dit EZVIZ-account gevonden die nog niet zijn geconfigureerd."
+    }
+  },
+  "entity": {
+    "image": {
+      "camera_snapshot": {
+        "name": "Camera — laatste momentopname"
+      },
+      "map": {
+        "name": "Kaart"
+      }
+    },
+    "sensor": {
+      "battery": {
+        "name": "Batterij"
+      },
+      "total_clean_area": {
+        "name": "Totaal gereinigde oppervlakte"
+      },
+      "main_brush": {
+        "name": "Hoofdborstel"
+      },
+      "side_brush": {
+        "name": "Zijborstel"
+      },
+      "hepa_filter": {
+        "name": "HEPA-filter"
+      },
+      "mop": {
+        "name": "Dweilpads"
+      },
+      "dust_bag": {
+        "name": "Stofzak"
+      },
+      "sensors": {
+        "name": "Sensoren"
+      },
+      "cleaning_solution": {
+        "name": "Reinigingsmiddel"
+      },
+      "station_mop_washing": {
+        "name": "Dweilwasfunctie van het station",
+        "state": {
+          "success": "Voltooid",
+          "running": "Aan het wassen",
+          "idle": "Inactief",
+          "error": "Fout"
+        }
+      },
+      "station_mop_drying": {
+        "name": "Dweildroogfunctie van het station",
+        "state": {
+          "success": "Voltooid",
+          "running": "Aan het drogen",
+          "idle": "Inactief",
+          "error": "Fout"
+        }
+      },
+      "station_dust_collection": {
+        "name": "Stofopvang van het station",
+        "state": {
+          "success": "Voltooid",
+          "running": "Aan het legen",
+          "idle": "Inactief",
+          "error": "Fout"
+        }
+      },
+      "station_water_tank_drain": {
+        "name": "Waterreservoir legen via het station",
+        "state": {
+          "success": "Voltooid",
+          "running": "Aan het afvoeren",
+          "idle": "Inactief",
+          "error": "Fout"
+        }
+      },
+      "station_plumbing_module": {
+        "name": "Watertoevoer- en afvoermodule",
+        "state": {
+          "installed": "Geïnstalleerd",
+          "not_installed": "Niet geïnstalleerd"
+        }
+      },
+      "total_clean_time": {
+        "name": "Totale schoonmaaktijd"
+      },
+      "total_clean_count": {
+        "name": "Totaal aantal schoonmaakbeurten"
+      },
+      "total_dust_collections": {
+        "name": "Totaal aantal stofopvangbeurten"
+      },
+      "total_mop_washes": {
+        "name": "Totaal aantal dweilwasbeurten"
+      },
+      "battery_cycles": {
+        "name": "Aantal laadcycli van de batterij"
+      },
+      "dirty_water_filter": {
+        "name": "Filter van het vuilwaterreservoir"
+      },
+      "current_task": {
+        "name": "Huidige taak"
+      },
+      "task_duration": {
+        "name": "Taakduur"
+      },
+      "relocation_failures": {
+        "name": "Mislukte herlokalisaties"
+      },
+      "last_error": {
+        "name": "Laatste fout"
+      },
+      "last_clean_area": {
+        "name": "Laatst gereinigde oppervlakte"
+      },
+      "wifi_signal": {
+        "name": "Wifi-signaal"
+      }
+    },
+    "switch": {
+      "station_child_lock": {
+        "name": "Kinderslot van het station"
+      },
+      "station_automatic_dust_collection": {
+        "name": "Automatische stofopvang"
+      },
+      "station_automatic_cleaning_solution": {
+        "name": "Automatische dosering van reinigingsmiddel"
+      },
+      "station_rotating_brush_self_clean": {
+        "name": "Zelfreiniging van de roterende borstel"
+      },
+      "do_not_disturb": {
+        "name": "Niet storen"
+      },
+      "do_not_disturb_resume": {
+        "name": "Schoonmaken hervatten na Niet storen"
+      },
+      "schedule": {
+        "name": "Schema {schedule}"
+      },
+      "carpet_detection": {
+        "name": "Tapijtdetectie"
+      },
+      "carpet_boost": {
+        "name": "Extra zuigkracht op tapijt"
+      },
+      "carpet_extra_clean": {
+        "name": "Extra tapijtreiniging"
+      },
+      "carpet_cross_when_blocked": {
+        "name": "Over tapijt rijden als er geen andere route is"
+      },
+      "pet_mode": {
+        "name": "Huisdierenmodus"
+      },
+      "smart_dirt_detection": {
+        "name": "Slimme vuilherkenning"
+      },
+      "debris_boost": {
+        "name": "Extra zuigkracht bij vuil"
+      },
+      "deep_edge_cleaning": {
+        "name": "Grondige randreiniging"
+      },
+      "off_peak_charging": {
+        "name": "Opladen tijdens daluren"
+      }
+    },
+    "select": {
+      "water_level": {
+        "name": "Waterniveau",
+        "state": {
+          "low": "Laag",
+          "middle": "Gemiddeld",
+          "high": "Hoog"
+        }
+      },
+      "cleaning_mode": {
+        "name": "Schoonmaakmodus",
+        "state": {
+          "sweep": "Alleen stofzuigen",
+          "mop": "Alleen dweilen",
+          "sweep_and_mop": "Stofzuigen en dweilen",
+          "sweep_then_mop": "Eerst stofzuigen, daarna dweilen"
+        }
+      },
+      "room_settings": {
+        "name": "Kamerinstellingen",
+        "state": {
+          "universal": "Hetzelfde voor alle kamers",
+          "custom": "Per kamer"
+        }
+      },
+      "room_suction": {
+        "name": "{room} zuigkracht",
+        "state": {
+          "quiet": "Stil",
+          "normal": "Normaal",
+          "strong": "Krachtig",
+          "super": "Maximaal"
+        }
+      },
+      "room_water_level": {
+        "name": "{room} waterniveau",
+        "state": {
+          "low": "Laag",
+          "middle": "Gemiddeld",
+          "high": "Hoog"
+        }
+      },
+      "mop_wash_trigger": {
+        "name": "Dweil wassen",
+        "state": {
+          "time": "Na het ingestelde interval",
+          "region": "Na elke kamer"
+        }
+      }
+    },
+    "number": {
+      "cleaning_passes": {
+        "name": "Aantal schoonmaakrondes"
+      },
+      "room_cleaning_passes": {
+        "name": "{room} aantal schoonmaakrondes"
+      },
+      "mop_wash_interval": {
+        "name": "Interval voor dweil wassen"
+      },
+      "mop_drying_time": {
+        "name": "Droogtijd van de dweil"
+      },
+      "dust_collection_frequency": {
+        "name": "Stofbak legen na N schoonmaakbeurten"
+      },
+      "voice_volume": {
+        "name": "Spraakvolume"
+      }
+    },
+    "time": {
+      "do_not_disturb_start": {
+        "name": "Niet storen begintijd"
+      },
+      "do_not_disturb_end": {
+        "name": "Niet storen eindtijd"
+      },
+      "schedule_start": {
+        "name": "Schema {schedule} begintijd"
+      },
+      "off_peak_charging_start": {
+        "name": "Begin daluren voor opladen"
+      },
+      "off_peak_charging_end": {
+        "name": "Einde daluren voor opladen"
+      }
+    },
+    "binary_sensor": {
+      "on_base_station": {
+        "name": "Op het basisstation"
+      },
+      "do_not_disturb_active": {
+        "name": "Niet storen actief"
+      }
+    }
+  },
+  "services": {
+    "inspect": {
+      "name": "Robot inspecteren",
+      "description": "Geeft opgeschoonde apparaatgegevens terug voor protocoldiagnostiek.",
+      "fields": {
+        "serial": {
+          "name": "Serienummer robot",
+          "description": "Serienummer van de robot. Laat dit leeg om de eerst geconfigureerde robot te gebruiken."
+        }
+      }
+    },
+    "map_diagnostics": {
+      "name": "Robotkaart inspecteren",
+      "description": "Test de alleen-lezen toegang tot de kaart en routegegevens zonder de robot te bedienen.",
+      "fields": {
+        "serial": {
+          "name": "Serienummer robot",
+          "description": "Serienummer van de robot. Laat dit leeg om de eerst geconfigureerde robot te gebruiken."
+        }
+      }
+    },
+    "camera_diagnostics": {
+      "name": "Robotcamera inspecteren",
+      "description": "Voert een korte verbindingstest uit zonder een afbeelding op te slaan.",
+      "fields": {
+        "serial": {
+          "name": "Serienummer robot",
+          "description": "Serienummer van de robot. Laat dit leeg om de eerst geconfigureerde robot te gebruiken."
+        }
+      }
+    },
+    "refresh_camera_snapshot": {
+      "name": "Momentopname maken met robotcamera",
+      "description": "Opent de camera kort, slaat één beeld in het geheugen op en sluit de stream.",
+      "fields": {
+        "serial": {
+          "name": "Serienummer robot",
+          "description": "Serienummer van de robot. Laat dit leeg om de eerst geconfigureerde robot te gebruiken."
+        }
+      }
+    },
+    "feature_request": {
+      "name": "Onbewerkt functieverzoek verzenden",
+      "description": "Alleen voor beheerders. Verstuurt één GET- of PUT-verzoek naar het functie-/actie-eindpunt van de robot in de cloud en geeft het onbewerkte antwoord terug. Bedoeld voor protocolonderzoek; een verkeerd PUT-verzoek kan robotinstellingen wijzigen.",
+      "fields": {
+        "method": {
+          "name": "Methode",
+          "description": "GET leest een waarde, PUT schrijft een waarde."
+        },
+        "endpoint": {
+          "name": "Eindpunt",
+          "description": "'feature' voor instellingen, 'action' voor opdrachten."
+        },
+        "domain": {
+          "name": "Domein",
+          "description": "Functiedomein, bijvoorbeeld SweeperCleanTask."
+        },
+        "identifier": {
+          "name": "Identificatiecode",
+          "description": "Naam van de functie of actie, bijvoorbeeld CarpetCleanCfg."
+        },
+        "payload": {
+          "name": "Payload",
+          "description": "JSON-inhoud voor PUT-verzoeken."
+        },
+        "resource": {
+          "name": "Bron",
+          "description": "Bronidentificatie, standaard SweepingRobot."
+        },
+        "local_index": {
+          "name": "Lokale index",
+          "description": "Bronkanaal, standaard 0."
+        },
+        "serial": {
+          "name": "Serienummer robot",
+          "description": "Serienummer van de robot. Laat dit leeg om de eerst geconfigureerde robot te gebruiken."
+        }
+      }
+    },
+    "api_request": {
+      "name": "Onbewerkt API-verzoek verzenden",
+      "description": "Alleen voor beheerders. Verstuurt één verzoek naar de EZVIZ API-server die door de accountsessie wordt gebruikt en geeft het antwoord terug. Bedoeld voor protocolonderzoek.",
+      "fields": {
+        "method": {
+          "name": "Methode",
+          "description": "HTTP-methode."
+        },
+        "path": {
+          "name": "Pad",
+          "description": "Pad op de EZVIZ API-server, beginnend met '/'."
+        },
+        "params": {
+          "name": "Queryparameters",
+          "description": "Optionele queryparameters."
+        },
+        "data": {
+          "name": "Formuliergegevens",
+          "description": "Optionele formulierinhoud."
+        },
+        "serial": {
+          "name": "Serienummer robot",
+          "description": "Serienummer van de robot. Laat dit leeg om de eerst geconfigureerde robot te gebruiken."
+        },
+        "json": {
+          "name": "JSON-inhoud",
+          "description": "Optionele JSON-inhoud van het verzoek."
+        },
+        "headers": {
+          "name": "Headers",
+          "description": "Optionele extra verzoekheaders."
+        }
+      }
+    }
+  }
+}
