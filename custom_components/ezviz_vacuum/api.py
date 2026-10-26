@@ -7,6 +7,7 @@ from collections.abc import Callable
 import gzip
 from importlib import metadata
 import json
+import logging
 from typing import Any
 import zlib
 
@@ -49,6 +50,8 @@ def rejection_reason(result: dict[str, Any], code: Any) -> str:
 
 
 # Map layer -> key of the layer in the cloud response.
+_LOGGER = logging.getLogger(__name__)
+
 MAP_LAYERS = {
     "map": "sweepRuleMapVo",
     "region": "sweepRuleRegionVo",
@@ -433,15 +436,19 @@ class EzvizVacuumApi:
         identifier: str,
         payload: Any,
     ) -> dict[str, Any]:
+        body = json.dumps(payload, separators=(",", ":"))
+        _LOGGER.debug("Robot %s %s/%s: %s", endpoint, domain, identifier, body)
         response = self._cloud.request(
             "PUT",
             f"/v3/iot-feature/{endpoint}/"
             f"{serial.upper()}/SweepingRobot/0/{domain}/{identifier}",
-            data=json.dumps(payload, separators=(",", ":")),
+            data=body,
             headers={"Content-Type": "application/json"},
         )
         response.raise_for_status()
         result = response.json()
+        if identifier != "QueryCurrentTask":
+            _LOGGER.debug("Robot %s/%s answered: %s", domain, identifier, result)
         if not isinstance(result, dict):
             raise EzvizVacuumApiError("EZVIZ returned an invalid response")
 
