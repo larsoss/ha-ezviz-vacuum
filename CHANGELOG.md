@@ -26,6 +26,12 @@ RE4 support, found and tested on real RE4 hardware by @RBrNx (#3, #4) and
 - Standard room names use the EZVIZ app's own names, in Home Assistant's
   language (about 30 languages), so they match the app. 28 room types instead
   of 15. Names typed in the app are kept as written (#5).
+
+## 1.1.0
+
+The integration now signs in to EZVIZ on its own instead of borrowing the
+official EZVIZ integration's session.
+
 - New setup: EZVIZ email or phone number, password and server, with the
   verification-code step when EZVIZ asks for one. Only the session token is
   stored, never the password.
