@@ -219,6 +219,15 @@ class CleanLogTests(unittest.TestCase):
         self.assertEqual(last["started_by"], "timePlan")
         self.assertIsNone(robot.last_clean_from_log({"list": []}))
 
+    def test_newest_by_time_across_offsets(self) -> None:
+        log = {
+            "list": [
+                {"id": 2, "cleanArea": 1, "startTime": "2026-10-26T10:00:00+02:00"},
+                {"id": 1, "cleanArea": 2, "startTime": "2026-10-26T09:30:00+00:00"},
+            ]
+        }
+        self.assertEqual(robot.last_clean_from_log(log)["area"], 2)
+
 
 class ErrorTests(unittest.TestCase):
     """English error descriptions."""

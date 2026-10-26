@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from datetime import datetime
 from functools import lru_cache
 import re
 from typing import Any
@@ -608,6 +609,16 @@ def clean_statistic(log: Mapping[str, Any] | None) -> Mapping[str, Any]:
     return stat if isinstance(stat, Mapping) else {}
 
 
+def _started(entry: Mapping[str, Any]) -> tuple[float, int]:
+    """Sort key of a clean log entry: start time, then id."""
+    try:
+        stamp = datetime.fromisoformat(str(entry.get("startTime"))).timestamp()
+    except ValueError:
+        stamp = 0.0
+    identifier = entry.get("id")
+    return stamp, identifier if isinstance(identifier, int) else 0
+
+
 def last_clean_from_log(log: Mapping[str, Any] | None) -> dict[str, Any] | None:
     """Return the newest clean of the cloud clean log, like ``last_clean``.
 
@@ -620,7 +631,7 @@ def last_clean_from_log(log: Mapping[str, Any] | None) -> dict[str, Any] | None:
     ]
     if not entries:
         return None
-    entry = max(entries, key=lambda item: str(item.get("startTime") or ""))
+    entry = max(entries, key=_started)
     area = entry.get("cleanArea")
     seconds = entry.get("cleanDuration")
     return {

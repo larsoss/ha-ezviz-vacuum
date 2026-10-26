@@ -181,6 +181,13 @@ class ApiTests(unittest.TestCase):
         self.assertTrue(call["url"].endswith("/v3/sweeprobot/v3/rule/clean/list"))
         self.assertEqual(call["params"], {"deviceSerial": "BC1234567"})
 
+    def test_fetch_clean_log_reports_a_refusal(self) -> None:
+        self.client._session.post = lambda url, **kw: FakeResponse(
+            {"meta": {"code": 400, "message": "Incorrect request parameter."}}
+        )
+        with self.assertRaises(load("api").EzvizVacuumApiError):
+            self.api.fetch_clean_log("ab1234567")
+
     def test_unknown_map_layer_is_rejected(self) -> None:
         with self.assertRaises(ValueError):
             self.api.fetch_map_layer("ab1234567", "everything", map_id=2)
