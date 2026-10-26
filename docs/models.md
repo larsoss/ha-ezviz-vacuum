@@ -63,3 +63,11 @@ All plugins read the map through the same `/v3/sweeprobot/v3/rule/*` endpoints.
 Each answer contains a download URL and an MD5 of the zip. The commands were
 extracted from the `sendAction`, `readFeature` and `writeFeature` calls in each
 bundle.
+
+## Room names
+
+The robot stores preset rooms as codes (`#@KeT#` is the living room). The
+names in `custom_components/ezviz_vacuum/room_names.py` were taken from the
+string tables of the `DeviceRS20ProPlus` plugin (`src/.../language/*.js`, keys
+such as `living_room`, `study_room`), so Home Assistant shows the same names as
+the app, in each of the app's languages.

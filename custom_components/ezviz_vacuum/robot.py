@@ -11,147 +11,39 @@ from typing import Any
 from .api import EzvizVacuumApi
 from .const import CLEAN_MODES
 from .helpers import feature, robot_features
+from .room_names import ROOM_NAMES_BY_LANGUAGE
 
-# Preset room names are stored by the robot as pinyin codes. Each code has a
-# name per interface language: en, de, es, fr, it, nl, pl.
-_ROOM_LANGUAGES = ("en", "de", "es", "fr", "it", "nl", "pl")
-_ROOM_TABLE = {
-    "#@ChuF#": ("Kitchen", "Küche", "Cocina", "Cuisine", "Cucina", "Keuken", "Kuchnia"),
-    "#@KeT#": (
-        "Living Room",
-        "Wohnzimmer",
-        "Salón",
-        "Salon",
-        "Soggiorno",
-        "Woonkamer",
-        "Salon",
-    ),
-    "#@WoS#": (
-        "Bedroom",
-        "Schlafzimmer",
-        "Dormitorio",
-        "Chambre",
-        "Camera da letto",
-        "Slaapkamer",
-        "Sypialnia",
-    ),
-    "#@ZhuW#": (
-        "Master Bedroom",
-        "Elternschlafzimmer",
-        "Dormitorio principal",
-        "Chambre parentale",
-        "Camera matrimoniale",
-        "Ouderslaapkamer",
-        "Sypialnia główna",
-    ),
-    "#@CiW#": (
-        "Guest Bedroom",
-        "Gästezimmer",
-        "Habitación de invitados",
-        "Chambre d'amis",
-        "Camera degli ospiti",
-        "Logeerkamer",
-        "Pokój gościnny",
-    ),
-    "#@ErTF#": (
-        "Kids Room",
-        "Kinderzimmer",
-        "Habitación infantil",
-        "Chambre d'enfant",
-        "Cameretta",
-        "Kinderkamer",
-        "Pokój dziecięcy",
-    ),
-    "#@XuanG#": (
-        "Entrance",
-        "Eingang",
-        "Entrada",
-        "Entrée",
-        "Ingresso",
-        "Entree",
-        "Wejście",
-    ),
-    "#@WeiYJ#": (
-        "Bathroom",
-        "Badezimmer",
-        "Baño",
-        "Salle de bain",
-        "Bagno",
-        "Badkamer",
-        "Łazienka",
-    ),
-    "#@ZouL#": (
-        "Hallway",
-        "Flur",
-        "Pasillo",
-        "Couloir",
-        "Corridoio",
-        "Gang",
-        "Korytarz",
-    ),
-    "#@CanT#": (
-        "Dining Room",
-        "Esszimmer",
-        "Comedor",
-        "Salle à manger",
-        "Sala da pranzo",
-        "Eetkamer",
-        "Jadalnia",
-    ),
-    "#@ShuF#": (
-        "Study",
-        "Arbeitszimmer",
-        "Estudio",
-        "Bureau",
-        "Studio",
-        "Werkkamer",
-        "Gabinet",
-    ),
-    "#@YangT#": (
-        "Balcony",
-        "Balkon",
-        "Balcón",
-        "Balcon",
-        "Balcone",
-        "Balkon",
-        "Balkon",
-    ),
-    "#@YiMJ#": (
-        "Closet",
-        "Ankleidezimmer",
-        "Vestidor",
-        "Dressing",
-        "Cabina armadio",
-        "Inloopkast",
-        "Garderoba",
-    ),
-    "#@XiYF#": (
-        "Laundry Room",
-        "Waschküche",
-        "Lavadero",
-        "Buanderie",
-        "Lavanderia",
-        "Washok",
-        "Pralnia",
-    ),
-    "#@FangJ#": ("Room", "Raum", "Habitación", "Pièce", "Stanza", "Kamer", "Pokój"),
-}
-# The generic word used for unnamed rooms ("Room 4").
+# Preset rooms are stored by the robot as codes such as ``#@KeT#``; their
+# names come from the EZVIZ app, in the languages the app supports.
 _ROOM_WORD = "#@FangJ#"
+# Home Assistant language codes that differ from the app's.
+_LANGUAGE_ALIASES = {
+    "zh-hans": "zh",
+    "zh-cn": "zh",
+    "zh-tw": "zh-Hant",
+    "zh-hk": "zh-Hant",
+    "no": "nb",
+}
 
 # English names, kept for callers that do not pass a language.
-ROOM_NAMES = {code: names[0] for code, names in _ROOM_TABLE.items()}
+ROOM_NAMES = ROOM_NAMES_BY_LANGUAGE["en"]
 
 
-def _language_index(language: str | None) -> int:
-    """Return the table column for a Home Assistant language such as ``nl``."""
-    code = str(language or "en").replace("_", "-").split("-")[0].lower()
-    return _ROOM_LANGUAGES.index(code) if code in _ROOM_LANGUAGES else 0
+def _room_names(language: str | None) -> dict[str, str]:
+    """Return the app's room names for a Home Assistant language."""
+    code = str(language or "en").replace("_", "-")
+    lowered = code.lower()
+    if lowered in _LANGUAGE_ALIASES:
+        return ROOM_NAMES_BY_LANGUAGE[_LANGUAGE_ALIASES[lowered]]
+    for candidate in (code, code.split("-")[0].lower()):
+        for name, names in ROOM_NAMES_BY_LANGUAGE.items():
+            if name.lower() == candidate.lower():
+                return names
+    return ROOM_NAMES
 
 
 def _preset(code: str, language: str | None) -> str | None:
-    names = _ROOM_TABLE.get(code)
-    return names[_language_index(language)] if names else None
+    return _room_names(language).get(code) or ROOM_NAMES.get(code)
 
 
 def _unnamed(room_id: Any, language: str | None) -> str:

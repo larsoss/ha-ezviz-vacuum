@@ -32,7 +32,7 @@ class MapTests(unittest.TestCase):
                 ("8", "Bedroom"),
                 ("9", "Living Room"),
                 ("10", "Bathroom"),
-                ("11", "Hallway"),
+                ("11", "Corridor"),
             ],
         )
         self.assertEqual(robot.rooms(fixtures.device(), 3), [])
@@ -45,16 +45,23 @@ class MapTests(unittest.TestCase):
         self.assertEqual(robot.room_name("#@ChuF#", 1, "nl"), "Keuken")
         self.assertEqual(robot.room_name("#@ZouL#", 1, "de"), "Flur")
         self.assertEqual(robot.room_name("#@KeT#", 1, "en-GB"), "Living Room")
-        self.assertEqual(robot.room_name("#@FangJ#4", 4, "nl"), "Kamer 4")
-        self.assertEqual(robot.room_name("", 7, "pl"), "Pokój 7")
+        self.assertEqual(robot.room_name("#@FangJ#4", 4, "nl"), "Ruimte 4")
+        self.assertEqual(robot.room_name("", 7, "pl"), "Lokal 7")
         # Languages without a table fall back to English; typed names stay.
-        self.assertEqual(robot.room_name("#@WoS#", 1, "ro"), "Bedroom")
+        self.assertEqual(robot.room_name("#@WoS#", 1, "is"), "Bedroom")
         self.assertEqual(robot.room_name("Office", 1, "nl"), "Office")
         self.assertEqual(robot.rooms(fixtures.device(), 2, "fr")[0], ("8", "Chambre"))
 
-    def test_every_preset_has_every_language(self) -> None:
-        for names in robot._ROOM_TABLE.values():
-            self.assertEqual(len(names), len(robot._ROOM_LANGUAGES))
+    def test_every_language_has_every_preset(self) -> None:
+        names = load("room_names").ROOM_NAMES_BY_LANGUAGE
+        for language, table in names.items():
+            self.assertEqual(set(table), set(names["en"]), language)
+
+    def test_app_names_and_language_variants(self) -> None:
+        self.assertEqual(robot.room_name("#@ShuF#", 3, "nl"), "Studeerkamer")
+        self.assertEqual(robot.room_name("#@WoS#", 1, "ro"), "Dormitor")
+        self.assertEqual(robot.room_name("#@ChuF#", 1, "zh-Hans"), "厨房")
+        self.assertEqual(robot.room_name("#@ChuF#", 1, "zh-Hant"), "廚房")
 
     def test_preset_names_with_index(self) -> None:
         self.assertEqual(robot.room_name("#@FangJ#4", 4), "Room 4")
