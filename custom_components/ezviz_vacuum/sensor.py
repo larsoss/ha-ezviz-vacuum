@@ -52,6 +52,42 @@ def _permanent(field: str) -> Callable[[Data], Any]:
     return read
 
 
+def _total(
+    robot_value: Callable[[Data], Any], stat_key: str, scale: float = 1
+) -> Callable[[Data], Any]:
+    """Use the robot's own lifetime counter, else the cloud clean log total."""
+
+    def read(data: Data) -> Any:
+        value = robot_value(data)
+        if value is not None:
+            return value
+        total = robot.clean_statistic(data.get("clean_log")).get(stat_key)
+        if isinstance(total, bool) or not isinstance(total, (int, float)):
+            return None
+        return round(total * scale, 2)
+
+    return read
+
+
+def _robot_scalar(key: str) -> Callable[[Data], Any]:
+    """Read a number anywhere in the robot report."""
+
+    def read(data: Data) -> Any:
+        try:
+            value = float(_find_scalar(data.get("device"), key))
+        except (TypeError, ValueError):
+            return None
+        return int(value) if value.is_integer() else value
+
+    return read
+
+
+def _last_clean(data: Data) -> dict[str, Any] | None:
+    return robot.last_clean(data.get("device")) or robot.last_clean_from_log(
+        data.get("clean_log")
+    )
+
+
 def _task(field: str) -> Callable[[Data], Any]:
     """Read a field of the live task."""
     return lambda data: robot.task_data(data.get("task")).get(field)
@@ -83,7 +119,7 @@ SENSORS: Final = (
     RobotSensorDescription(
         key="total_clean_area",
         translation_key="total_clean_area",
-        source_key="totalCleanArea",
+        value_fn=_total(_robot_scalar("totalCleanArea"), "totalArea"),
         native_unit_of_measurement=UnitOfArea.SQUARE_METERS,
         state_class=SensorStateClass.TOTAL_INCREASING,
         icon="mdi:texture-box",
@@ -91,7 +127,7 @@ SENSORS: Final = (
     RobotSensorDescription(
         key="total_clean_time",
         translation_key="total_clean_time",
-        value_fn=_permanent("totalCleanTimeMin"),
+        value_fn=_total(_permanent("totalCleanTimeMin"), "totalHour", 60),
         device_class=SensorDeviceClass.DURATION,
         native_unit_of_measurement=UnitOfTime.MINUTES,
         suggested_unit_of_measurement=UnitOfTime.HOURS,
@@ -101,7 +137,7 @@ SENSORS: Final = (
     RobotSensorDescription(
         key="total_clean_count",
         translation_key="total_clean_count",
-        value_fn=_permanent("totalCleanCount"),
+        value_fn=_total(_permanent("totalCleanCount"), "totalCount"),
         state_class=SensorStateClass.TOTAL_INCREASING,
         icon="mdi:counter",
     ),
@@ -167,8 +203,8 @@ SENSORS: Final = (
     RobotSensorDescription(
         key="last_clean_area",
         translation_key="last_clean_area",
-        value_fn=lambda data: (robot.last_clean(data.get("device")) or {}).get("area"),
-        attributes_fn=lambda data: robot.last_clean(data.get("device")),
+        value_fn=lambda data: (_last_clean(data) or {}).get("area"),
+        attributes_fn=_last_clean,
         native_unit_of_measurement=UnitOfArea.SQUARE_METERS,
         icon="mdi:history",
     ),

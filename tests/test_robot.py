@@ -181,6 +181,45 @@ class ActivityTests(unittest.TestCase):
         self.check("somethingNew", robot.ACTIVITY_IDLE, isOnBasestation=False)
 
 
+class CleanLogTests(unittest.TestCase):
+    """The cloud clean log gives totals and the last clean (RE4)."""
+
+    log = {
+        "list": [
+            {
+                "cleanArea": 1.7,
+                "cleanDuration": 133,
+                "cleanRange": "region",
+                "cleanMode": "sweep",
+                "startType": "mobileAPP",
+                "stopType": "normal",
+                "startTime": "2026-10-25T20:57:19.000+01:00",
+            },
+            {
+                "cleanArea": 16.17,
+                "cleanDuration": 667,
+                "cleanRange": "full",
+                "cleanMode": "sweep",
+                "startType": "timePlan",
+                "stopType": "normal",
+                "startTime": "2026-10-26T16:43:42.000+01:00",
+            },
+        ],
+        "statistic": {"totalHour": 181.3831, "totalArea": 8661.93, "totalCount": 249},
+    }
+
+    def test_statistic(self) -> None:
+        self.assertEqual(robot.clean_statistic(self.log)["totalCount"], 249)
+        self.assertEqual(robot.clean_statistic(None), {})
+
+    def test_last_clean_is_the_newest(self) -> None:
+        last = robot.last_clean_from_log(self.log)
+        self.assertEqual(last["area"], 16.17)
+        self.assertEqual(last["duration_minutes"], 11)
+        self.assertEqual(last["started_by"], "timePlan")
+        self.assertIsNone(robot.last_clean_from_log({"list": []}))
+
+
 class ErrorTests(unittest.TestCase):
     """English error descriptions."""
 

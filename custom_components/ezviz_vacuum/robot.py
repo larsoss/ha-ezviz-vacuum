@@ -600,3 +600,39 @@ def last_clean(device: Mapping[str, Any] | None) -> dict[str, Any] | None:
         "stop_reason": entry.get("stopType"),
         "map_id": entry.get("mapID"),
     }
+
+
+def clean_statistic(log: Mapping[str, Any] | None) -> Mapping[str, Any]:
+    """Return the lifetime totals of the cloud clean log."""
+    stat = log.get("statistic") if isinstance(log, Mapping) else None
+    return stat if isinstance(stat, Mapping) else {}
+
+
+def last_clean_from_log(log: Mapping[str, Any] | None) -> dict[str, Any] | None:
+    """Return the newest clean of the cloud clean log, like ``last_clean``.
+
+    Used for robots that keep no cleaning history on the robot (RE4).
+    """
+    entries = [
+        item
+        for item in _as_list(log.get("list") if isinstance(log, Mapping) else None)
+        if isinstance(item, Mapping)
+    ]
+    if not entries:
+        return None
+    entry = max(entries, key=lambda item: str(item.get("startTime") or ""))
+    area = entry.get("cleanArea")
+    seconds = entry.get("cleanDuration")
+    return {
+        "area": area if isinstance(area, (int, float)) else None,
+        "duration_minutes": round(seconds / 60)
+        if isinstance(seconds, (int, float))
+        else None,
+        "start": entry.get("startTime"),
+        "end": None,
+        "cleaning_mode": entry.get("cleanMode"),
+        "cleaning_range": entry.get("cleanRange"),
+        "started_by": entry.get("startType"),
+        "stop_reason": entry.get("stopType"),
+        "map_id": None,
+    }

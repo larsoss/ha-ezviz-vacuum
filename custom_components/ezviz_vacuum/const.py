@@ -15,6 +15,8 @@ DEFAULT_SCAN_INTERVAL = timedelta(seconds=30)
 ACTIVE_SCAN_INTERVAL = timedelta(seconds=10)
 # Seconds between full device reports (settings, consumables, history).
 DEVICE_REFRESH_INTERVAL = 300
+# The cloud clean log (lifetime totals) is read this often, and after a clean.
+CLEAN_LOG_REFRESH_INTERVAL = 1800
 
 SERVICE_INSPECT = "inspect"
 SERVICE_MAP_DIAGNOSTICS = "map_diagnostics"

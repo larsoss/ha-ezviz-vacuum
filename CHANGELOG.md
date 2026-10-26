@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.1.1b4 (beta)
+## 1.1.1b5 (beta)
 
 RE4 support, found and tested on real RE4 hardware by @RBrNx (#3, #4) and
 @larsoss (#5, #6).
@@ -18,6 +18,9 @@ RE4 support, found and tested on real RE4 hardware by @RBrNx (#3, #4) and
 - Carpet boost works on the RE4, which stores it as a 0/1 flag (#6).
 - Do not disturb works on the RE4, which keeps it in its own setting (#7).
 - Dutch translation (#6).
+- Total cleaning area, time and count, and the last clean, on robots that do
+  not report them themselves (RE4): read from the cloud clean log, like the
+  app's clean log page. Robots that report them keep their own values.
 - Standard room names (Kitchen, Bedroom, ...) follow Home Assistant's
   language: English, German, Spanish, French, Italian, Dutch or Polish. Names
   typed in the app are kept as written (#5).

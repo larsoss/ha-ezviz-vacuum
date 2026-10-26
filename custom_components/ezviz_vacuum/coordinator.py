@@ -27,6 +27,7 @@ from .cloud import EzvizCloud
 from .cloud_camera import capture_cloud_snapshot, trace_cloud_stream
 from .const import (
     ACTIVE_SCAN_INTERVAL,
+    CLEAN_LOG_REFRESH_INTERVAL,
     CONF_SERIAL,
     DEFAULT_SCAN_INTERVAL,
     DEVICE_REFRESH_INTERVAL,
@@ -68,6 +69,8 @@ class EzvizVacuumCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.room_names: dict[int, str] = {}
         self.camera_snapshot: bytes | None = None
         self.camera_snapshot_updated: datetime | None = None
+        self._clean_log: dict[str, Any] | None = None
+        self._clean_log_fetched: float | None = None
 
     def _api(self) -> EzvizCloud:
         return self.cloud
@@ -144,6 +147,9 @@ class EzvizVacuumCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             task_error = str(err)
 
         task_name = robot.current_task(task) if task else None
+        task_changed = bool(
+            task_name and self._device_task and task_name != self._device_task
+        )
         if self._device_is_stale(task_name):
             self.serial, self._device = await self._async_fetch_device(cloud)
             self._device_fetched = monotonic()
@@ -162,12 +168,42 @@ class EzvizVacuumCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 ACTIVE_SCAN_INTERVAL if moving else DEFAULT_SCAN_INTERVAL
             )
 
+        await self._async_refresh_clean_log(force=task_changed)
+
         return {
             "serial": self.serial,
             "device": self._device,
             "task": task,
             "task_error": task_error,
+            "clean_log": self._clean_log,
         }
+
+    async def _async_refresh_clean_log(self, *, force: bool = False) -> None:
+        """Read the cloud clean log now and then, and when a task changes.
+
+        It holds the lifetime totals for robots that do not report them
+        themselves (RE4). Failures keep the last log.
+        """
+        if self.robot_api is None:
+            return
+        fetched = self._clean_log_fetched
+        if (
+            not force
+            and fetched is not None
+            and monotonic() - fetched < CLEAN_LOG_REFRESH_INTERVAL
+        ):
+            return
+        self._clean_log_fetched = monotonic()
+        try:
+            self._clean_log = await self.hass.async_add_executor_job(
+                self.robot_api.fetch_clean_log, self.serial
+            )
+        except EzvizAuthTokenExpired as err:
+            raise ConfigEntryAuthFailed(
+                "The EZVIZ login has expired; please sign in again"
+            ) from err
+        except Exception as err:  # noqa: BLE001 - totals are optional
+            self.logger.debug("Could not read the clean log: %s", err)
 
     async def _async_refresh_map(self, task: Mapping[str, Any]) -> None:
         """Fetch map layers whose version changed and redraw the map.

@@ -295,6 +295,29 @@ class EzvizVacuumApi:
         value = result.get(MAP_LAYERS[layer])
         return value if isinstance(value, dict) else {}
 
+    def fetch_clean_log(self, serial: str) -> dict[str, Any]:
+        """Read the cloud clean log: recent cleans and lifetime totals.
+
+        This is what the app's clean log page loads; it only reads data. The
+        answer has ``list`` (recent cleans) and ``statistic`` (``totalHour``,
+        ``totalArea``, ``totalCount``).
+        """
+        response = self._cloud.request(
+            "POST",
+            "/v3/sweeprobot/v3/rule/clean/list",
+            params={"deviceSerial": serial.upper()},
+        )
+        response.raise_for_status()
+        result = response.json()
+        if not isinstance(result, dict):
+            raise EzvizVacuumApiError("EZVIZ returned an invalid clean log")
+        meta = result.get("meta")
+        code = meta.get("code") if isinstance(meta, dict) else None
+        if code not in (None, 0, 200, "0", "200"):
+            raise EzvizVacuumApiError(f"clean/list: {rejection_reason(result, code)}")
+        data = result.get("data")
+        return data if isinstance(data, dict) else {}
+
     @staticmethod
     def decode_diagnostic_blob(blob: Any) -> Any:
         """Decode the gzip/base64 diagnostic fields reported by the robot."""

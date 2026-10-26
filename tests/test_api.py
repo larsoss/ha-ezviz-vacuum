@@ -170,6 +170,17 @@ class ApiTests(unittest.TestCase):
         )
         self.assertEqual(value, {"mapId": 2})
 
+    def test_fetch_clean_log_returns_list_and_totals(self) -> None:
+        data = {"list": [], "statistic": {"totalHour": 181.38, "totalCount": 249}}
+        self.client._session.post = lambda url, **kw: (
+            self.client._session.calls.append({"url": url, **kw})
+            or FakeResponse({"meta": {"code": 200}, "data": data})
+        )
+        self.assertEqual(self.api.fetch_clean_log("bc1234567"), data)
+        call = self.client._session.calls[0]
+        self.assertTrue(call["url"].endswith("/v3/sweeprobot/v3/rule/clean/list"))
+        self.assertEqual(call["params"], {"deviceSerial": "BC1234567"})
+
     def test_unknown_map_layer_is_rejected(self) -> None:
         with self.assertRaises(ValueError):
             self.api.fetch_map_layer("ab1234567", "everything", map_id=2)
