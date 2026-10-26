@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.1.1b7 (beta)
+## 1.1.1b8 (beta)
 
 RE4 support, found and tested on real RE4 hardware by @RBrNx (#3, #4) and
 @larsoss (#5, #6).
@@ -26,6 +26,8 @@ RE4 support, found and tested on real RE4 hardware by @RBrNx (#3, #4) and
 - Standard room names use the EZVIZ app's own names, in Home Assistant's
   language (about 30 languages), so they match the app. 28 room types instead
   of 15. Names typed in the app are kept as written (#5).
+- Per-room suction and water send only the settings the robot has, like the
+  app (the RE4 has no per-room passes) (#4).
 
 ## 1.1.0
 

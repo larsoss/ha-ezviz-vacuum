@@ -68,6 +68,6 @@ bundle.
 
 The robot stores preset rooms as codes (`#@KeT#` is the living room). The
 names in `custom_components/ezviz_vacuum/room_names.py` were taken from the
-string tables of the `DeviceRS20ProPlus` plugin (`src/.../language/*.js`, keys
+string tables of the `DeviceRS20ProPlus` plugin (Hebrew and Slovak from `DeviceSweepingRobot2`, which uses the same names) (`src/.../language/*.js`, keys
 such as `living_room`, `study_room`), so Home Assistant shows the same names as
 the app, in each of the app's languages.

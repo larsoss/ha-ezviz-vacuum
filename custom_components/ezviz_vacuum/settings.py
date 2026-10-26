@@ -248,13 +248,12 @@ class RoomCleanSetting(Setting):
         map_id = robot.active_map_id(device, task)
         for room in robot.room_clean_configs(device, map_id):
             if room.get("roomID") == self.room_id:
-                payload = {
-                    "mapID": map_id,
-                    "roomID": self.room_id,
-                    "fanMode": room.get("fanMode"),
-                    "waterQuantity": room.get("waterQuantity"),
-                    "cleanTimes": room.get("cleanTimes"),
-                }
+                payload = {"mapID": map_id, "roomID": self.room_id}
+                # Like the app: send the room's settings, leaving out the
+                # ones this robot does not have (the RE4 has no cleanTimes).
+                for field in ("fanMode", "waterQuantity", "cleanTimes"):
+                    if room.get(field) is not None:
+                        payload[field] = room[field]
                 payload[self.field] = value
                 return "SweeperMapMgr", "SetRoomCustomCleanCfg", payload
         raise ValueError(f"Room {self.room_id} has no cleaning settings")

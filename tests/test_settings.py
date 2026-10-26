@@ -159,6 +159,37 @@ class ActionTests(unittest.TestCase):
             ),
         )
 
+    def test_room_setting_leaves_out_fields_the_robot_lacks(self) -> None:
+        # RE4: rooms carry no cleanTimes; the app does not send one either.
+        device = {
+            "FEATURE_INFO": {
+                "0": {
+                    "SweepingRobot": {
+                        "SweeperMapMgr": {
+                            "RoomCustomCleanCfg": [
+                                {
+                                    "mapID": 2,
+                                    "room": [
+                                        {
+                                            "roomID": 3,
+                                            "fanMode": "normal",
+                                            "waterQuantity": "middle",
+                                            "order": -1,
+                                        }
+                                    ],
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        }
+        task = {"data": {"currentMapID": 2}}
+        self.assertEqual(
+            settings.RoomCleanSetting(3, "fanMode").action(device, task, "strong")[2],
+            {"mapID": 2, "roomID": 3, "fanMode": "strong", "waterQuantity": "middle"},
+        )
+
     def test_global_clean_cfg_fallback_for_re7(self) -> None:
         device = fixtures.device()
         tree = load("robot").robot_features(device)
