@@ -20,6 +20,7 @@ from .settings import (
     RestPlanSetting,
     Setting,
     clean_plans,
+    do_not_disturb,
 )
 
 
@@ -64,7 +65,7 @@ SWITCHES: Final[tuple[RobotSwitchDescription, ...]] = (
         key="do_not_disturb",
         translation_key="do_not_disturb",
         icon="mdi:sleep",
-        setting=RestPlanSetting("enabled"),
+        setting=do_not_disturb("enabled"),
     ),
     RobotSwitchDescription(
         key="do_not_disturb_resume",

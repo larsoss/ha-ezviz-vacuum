@@ -16,9 +16,9 @@ from .entity import RobotSettingEntity
 from .settings import (
     CleanPlanSetting,
     FieldSetting,
-    RestPlanSetting,
     Setting,
     clean_plans,
+    do_not_disturb,
 )
 from .switch import schedule_label
 
@@ -36,13 +36,13 @@ TIMES: Final[tuple[RobotTimeDescription, ...]] = (
         key="do_not_disturb_start",
         translation_key="do_not_disturb_start",
         icon="mdi:weather-night",
-        setting=RestPlanSetting("startTime"),
+        setting=do_not_disturb("startTime"),
     ),
     RobotTimeDescription(
         key="do_not_disturb_end",
         translation_key="do_not_disturb_end",
         icon="mdi:weather-sunset-up",
-        setting=RestPlanSetting("endTime"),
+        setting=do_not_disturb("endTime"),
     ),
     RobotTimeDescription(
         key="off_peak_charging_start",

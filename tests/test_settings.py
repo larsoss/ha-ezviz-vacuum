@@ -259,6 +259,42 @@ class RestPlanSettingTests(unittest.TestCase):
         self.assertEqual(payload["plan"][0]["ID"], 0)
 
 
+class DoNotDisturbTests(unittest.TestCase):
+    """Do not disturb lives in RestPlan (RS20) or RestMode (RE4)."""
+
+    re4 = {
+        "FEATURE_INFO": {
+            "0": {
+                "SweepingRobot": {
+                    "SweeperMgr": {
+                        "RestMode": {
+                            "startTime": "22:00:00",
+                            "endTime": "07:00:00",
+                            "enabled": True,
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    def test_rs20_uses_rest_plan(self) -> None:
+        setting = settings.do_not_disturb("enabled")
+        _, identifier, _ = setting.write(fixtures.device(), None, False)
+        self.assertEqual(identifier, "RestPlan")
+
+    def test_re4_uses_rest_mode(self) -> None:
+        self.assertIs(settings.do_not_disturb("enabled").read(self.re4), True)
+        self.assertEqual(settings.do_not_disturb("endTime").read(self.re4), "07:00:00")
+        domain, identifier, payload = settings.do_not_disturb("startTime").write(
+            self.re4, None, "23:00:00"
+        )
+        self.assertEqual((domain, identifier), ("SweeperMgr", "RestMode"))
+        self.assertEqual(
+            payload, {"startTime": "23:00:00", "endTime": "07:00:00", "enabled": True}
+        )
+
+
 class CleanPlanSettingTests(unittest.TestCase):
     """Schedules are changed one at a time."""
 
