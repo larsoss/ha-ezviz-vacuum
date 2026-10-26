@@ -2,36 +2,59 @@
 
 ## 1.1.1b9 (beta)
 
-RE4 support, found and tested on real RE4 hardware by @RBrNx (#3, #4) and
-@larsoss (#5, #6).
+Changes since 1.1.1b6 (1.1.1b7 and 1.1.1b8 were not published).
 
-- Start, pause and stop work on robots that use `CleanCtrl` (RE4); they
-  take an object payload, not a bare command (#5).
-- Rooms are read from the room cleaning settings when the robot does not
-  report its room list, so room cleaning works on the RE4.
-- Room names come from the map's room layer, so the RE4 shows real names
-  instead of "Room N". Preset names with a number (`Room 4`) and the laundry
-  room are translated.
-- The "On base station" sensor accepts robots that report it as 0/1.
-- The cleaning path is drawn at the right size on robots that store it at
-  ten times the map's resolution; the scale is detected from the map itself.
-- Carpet boost works on the RE4, which stores it as a 0/1 flag (#6).
-- Do not disturb works on the RE4, which keeps it in its own setting (#7).
-- Dutch translation (#6).
-- Debug logging shows each robot command, what was sent and the robot's
-  answer, to compare with the EZVIZ app.
-- Total cleaning area, time and count, and the last clean, on robots that do
-  not report them themselves (RE4): read from the cloud clean log, like the
-  app's clean log page. Robots that report them keep their own values.
 - Standard room names use the EZVIZ app's own names, in Home Assistant's
-  language (about 30 languages), so they match the app. 28 room types instead
-  of 15. Names typed in the app are kept as written (#5).
+  language (about 30 languages, 28 room types), so they match the app. Some
+  English names change, e.g. Hallway → Corridor; entity IDs stay the same.
+  Names typed in the app are kept as written (#5).
 - Per-room suction and water send only the settings the robot has, like the
   app (the RE4 has no per-room passes) (#4).
 - Settings the robot does not report get no entity, instead of one that is
   always unavailable (for example cleaning mode on the RE4).
 - Last error shows the robot's current error when the robot keeps no error
   history (RE4).
+
+## 1.1.1b6 (beta)
+
+Changes since 1.1.1b4 (1.1.1b5 was not published).
+
+- Total cleaned area, cleaning time and number of cleanings, and the last
+  clean, on robots that do not report them themselves (RE4): read from the
+  cloud clean log, like the app's clean log page. Robots that report them
+  keep their own values (#5).
+- Debug logging shows each robot command and the robot's answer, to compare
+  with the EZVIZ app.
+
+## 1.1.1b4 (beta)
+
+- Do not disturb works on the RE4, which keeps it in its own setting. By
+  @larsoss (#7).
+
+## 1.1.1b3 (beta)
+
+- Standard room names follow Home Assistant's language (English, German,
+  Spanish, French, Italian, Dutch or Polish) (#5).
+
+## 1.1.1b2 (beta)
+
+- Carpet boost works on the RE4, which stores it as a 0/1 flag. By @larsoss
+  (#6).
+- Dutch translation. By @larsoss (#6).
+
+## 1.1.1b1 (beta)
+
+RE4 support, found and tested on real RE4 hardware by @RBrNx (#3, #4).
+
+- Start, pause and stop work on robots that use `CleanCtrl` (RE4); they take
+  an object payload, not a bare command (#5).
+- Rooms are read from the room cleaning settings when the robot does not
+  report its room list, so room cleaning works on the RE4.
+- Room names come from the map's room layer, so the RE4 shows real names
+  instead of "Room N".
+- The "On base station" sensor accepts robots that report it as 0/1.
+- The cleaning path is drawn at the right size on robots that store it at
+  ten times the map's resolution; the scale is detected from the map itself.
 
 ## 1.1.0
 
