@@ -82,6 +82,11 @@ def _robot_scalar(key: str) -> Callable[[Data], Any]:
     return read
 
 
+def _last_error(data: Data) -> dict[str, Any] | None:
+    """The robot's error history, else the last error of its live task."""
+    return robot.last_error(data.get("device")) or data.get("last_exception")
+
+
 def _last_clean(data: Data) -> dict[str, Any] | None:
     return robot.last_clean(data.get("device")) or robot.last_clean_from_log(
         data.get("clean_log")
@@ -194,10 +199,8 @@ SENSORS: Final = (
     RobotSensorDescription(
         key="last_error",
         translation_key="last_error",
-        value_fn=lambda data: (robot.last_error(data.get("device")) or {}).get(
-            "description"
-        ),
-        attributes_fn=lambda data: robot.last_error(data.get("device")),
+        value_fn=lambda data: (_last_error(data) or {}).get("description"),
+        attributes_fn=_last_error,
         icon="mdi:alert-circle-outline",
     ),
     RobotSensorDescription(

@@ -12,7 +12,7 @@ from homeassistant.const import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .coordinator import EzvizVacuumCoordinator
-from .entity import RobotSettingEntity
+from .entity import RobotSettingEntity, reported
 from .settings import (
     CleanPlanSetting,
     FieldSetting,
@@ -80,6 +80,7 @@ async def async_setup_entry(
     entities = [
         RobotSettingTime(coordinator, description.key, description)
         for description in TIMES
+        if reported(coordinator, description.setting)
     ]
     for plan in clean_plans(coordinator.data.get("device")):
         plan_id = int(plan["planID"])

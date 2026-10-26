@@ -70,6 +70,9 @@ class EzvizVacuumCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.camera_snapshot: bytes | None = None
         self.camera_snapshot_updated: datetime | None = None
         self._clean_log: dict[str, Any] | None = None
+        # The last error seen in the live task, for robots without an error
+        # history (RE4).
+        self._last_exception: dict[str, Any] | None = None
         self._clean_log_fetched: float | None = None
 
     def _api(self) -> EzvizCloud:
@@ -169,6 +172,7 @@ class EzvizVacuumCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
 
         await self._async_refresh_clean_log(force=task_changed)
+        self._remember_exception(task)
 
         return {
             "serial": self.serial,
@@ -176,6 +180,22 @@ class EzvizVacuumCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "task": task,
             "task_error": task_error,
             "clean_log": self._clean_log,
+            "last_exception": self._last_exception,
+        }
+
+    def _remember_exception(self, task: Mapping[str, Any]) -> None:
+        """Keep the most recent error the robot reported in its live task."""
+        from homeassistant.util import dt as dt_util
+
+        code = robot.task_exception(task) if task else None
+        if code is None:
+            return
+        if self._last_exception and self._last_exception.get("code") == code:
+            return
+        self._last_exception = {
+            "code": code,
+            "description": robot.error_description(code),
+            "time": dt_util.now().isoformat(timespec="seconds"),
         }
 
     async def _async_refresh_clean_log(self, *, force: bool = False) -> None:

@@ -16,7 +16,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import robot
 from .coordinator import EzvizVacuumCoordinator
-from .entity import RobotSettingEntity
+from .entity import RobotSettingEntity, reported
 from .settings import (
     FieldSetting,
     MapCleanSetting,
@@ -126,6 +126,7 @@ async def async_setup_entry(
     entities = [
         RobotSettingNumber(coordinator, description.key, description)
         for description in NUMBERS
+        if reported(coordinator, description.setting)
     ]
     entities.extend(
         RobotSettingNumber(coordinator, key, description, {"room": name})

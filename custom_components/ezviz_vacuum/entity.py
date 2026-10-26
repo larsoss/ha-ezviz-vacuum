@@ -60,3 +60,13 @@ class RobotSettingEntity(RobotEntity):
     async def async_write_setting(self, value: Any) -> None:
         """Send a new value to the robot."""
         await self.coordinator.async_write_setting(self.setting, value)
+
+
+def reported(coordinator: EzvizVacuumCoordinator, setting: Setting) -> bool:
+    """Return whether the robot reports a setting, so its entity is created.
+
+    Settings a model does not have (no carpet options, no cleaning mode on
+    the RE4) get no entity instead of one that is always unavailable.
+    """
+    data = coordinator.data or {}
+    return setting.available(data.get("device"), data.get("task"))

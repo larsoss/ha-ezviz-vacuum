@@ -11,7 +11,7 @@ from homeassistant.const import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .coordinator import EzvizVacuumCoordinator
-from .entity import RobotSettingEntity
+from .entity import RobotSettingEntity, reported
 from .settings import (
     CleanPlanSetting,
     FieldSetting,
@@ -165,7 +165,9 @@ async def async_setup_entry(
     """Set up the robot setting switches."""
     coordinator = entry.runtime_data
     entities: list[SwitchEntity] = [
-        RobotSettingSwitch(coordinator, description) for description in SWITCHES
+        RobotSettingSwitch(coordinator, description)
+        for description in SWITCHES
+        if reported(coordinator, description.setting)
     ]
     # Schedules are read once; reload the integration after adding one.
     for plan in clean_plans(coordinator.data.get("device")):

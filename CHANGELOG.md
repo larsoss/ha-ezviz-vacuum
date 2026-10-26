@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.1.1b8 (beta)
+## 1.1.1b9 (beta)
 
 RE4 support, found and tested on real RE4 hardware by @RBrNx (#3, #4) and
 @larsoss (#5, #6).
@@ -28,6 +28,10 @@ RE4 support, found and tested on real RE4 hardware by @RBrNx (#3, #4) and
   of 15. Names typed in the app are kept as written (#5).
 - Per-room suction and water send only the settings the robot has, like the
   app (the RE4 has no per-room passes) (#4).
+- Settings the robot does not report get no entity, instead of one that is
+  always unavailable (for example cleaning mode on the RE4).
+- Last error shows the robot's current error when the robot keeps no error
+  history (RE4).
 
 ## 1.1.0
 

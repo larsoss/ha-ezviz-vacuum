@@ -13,7 +13,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from . import robot
 from .const import CLEAN_MODES
 from .coordinator import EzvizVacuumCoordinator
-from .entity import RobotSettingEntity
+from .entity import RobotSettingEntity, reported
 from .settings import (
     FAN_SPEEDS,
     ROOM_SETTING_MODES,
@@ -116,6 +116,7 @@ async def async_setup_entry(
     entities = [
         RobotSettingSelect(coordinator, description.key, description)
         for description in SELECTS
+        if reported(coordinator, description.setting)
     ]
     # Rooms are read once; reload the integration after editing the map.
     entities.extend(
