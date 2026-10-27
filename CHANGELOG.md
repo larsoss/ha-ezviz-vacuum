@@ -27,7 +27,13 @@
   task ("The wheel is suspended, please put the device on the ground to start
   it" instead of "Robot error 0xe0010025"): the message of the event list that
   arrives within a few seconds of the error is used. The event list is read
-  again for up to ten minutes after a new error until the message is found.
+  again for up to five minutes after a new error until the message is found.
+  An error that was already active when Home Assistant started uses the newest
+  fault message of the last six hours, and a code explained once is remembered.
+  The RE4 code `0xe0010025` is known as "The wheel is suspended".
+- A "Last error time" sensor (timestamp) changes with every new error. The text
+  of "Last error" stays the same when the same error comes back, so Home
+  Assistant does not show a new entry for it.
 
 ## 1.1.1b9 (beta)
 

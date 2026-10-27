@@ -16,6 +16,7 @@ from homeassistant.components.sensor import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfArea, UnitOfTime
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.util import dt as dt_util
 
 from . import robot
 from .coordinator import EzvizVacuumCoordinator
@@ -142,6 +143,20 @@ def _last_event_attributes(data: Data) -> dict[str, Any] | None:
     }
 
 
+def _last_error_time(data: Data) -> Any:
+    """When the last error happened, as a timestamp.
+
+    The "Last error" text stays the same when the same error comes back, so
+    this is what changes with every new error.
+    """
+    stamp = dt_util.parse_datetime(str((_last_error(data) or {}).get("time") or ""))
+    if stamp is None:
+        return None
+    return (
+        stamp if stamp.tzinfo else stamp.replace(tzinfo=dt_util.get_default_time_zone())
+    )
+
+
 SENSORS: Final = (
     RobotSensorDescription(
         key="battery",
@@ -250,6 +265,13 @@ SENSORS: Final = (
         value_fn=lambda data: (_last_error(data) or {}).get("description"),
         attributes_fn=_last_error,
         icon="mdi:alert-circle-outline",
+    ),
+    RobotSensorDescription(
+        key="last_error_time",
+        translation_key="last_error_time",
+        value_fn=_last_error_time,
+        device_class=SensorDeviceClass.TIMESTAMP,
+        icon="mdi:clock-alert-outline",
     ),
     RobotSensorDescription(
         key="last_clean_area",

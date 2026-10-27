@@ -313,7 +313,7 @@ class EzvizVacuumApi:
         return value if isinstance(value, dict) else {}
 
     def fetch_messages(
-        self, serial: str, day: str, *, language: str | None = None
+        self, serial: str, day: str, language: str | None = None
     ) -> list[dict[str, Any]]:
         """Read the app's event list ("Events" tab) for one day (``YYYYMMDD``).
 

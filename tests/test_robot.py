@@ -472,5 +472,74 @@ class ErrorExplanationTests(unittest.TestCase):
         self.assertEqual(found["code"], 30109)
 
 
+class ActiveErrorTests(unittest.TestCase):
+    """An error that was already there before the integration started."""
+
+    EVENTS = [
+        {
+            "text": "The wheel is suspended, please put the device on the ground",
+            "time": "2026-10-27 09:16:03",
+            "code": 30109,
+            "notice": False,
+        },
+        {
+            "text": "Cleaning completed",
+            "time": "2026-10-27 07:41:02",
+            "code": 30084,
+            "notice": True,
+        },
+    ]
+    ERROR = {"code": "0xe0010025", "robot_time": "2026-10-27T09:25:37.000"}
+
+    def test_no_match_close_in_time_without_the_fallback(self) -> None:
+        self.assertIsNone(robot.event_for_error(self.ERROR, self.EVENTS))
+
+    def test_the_newest_earlier_fault_is_used_for_an_active_error(self) -> None:
+        found = robot.event_for_error(self.ERROR, self.EVENTS, earlier=6 * 3600)
+        self.assertEqual(found["code"], 30109)
+
+    def test_a_finished_clean_is_never_the_explanation(self) -> None:
+        events = [self.EVENTS[1]]
+        error = {"code": "x", "robot_time": "2026-10-27T07:41:30.000"}
+        self.assertIsNone(robot.event_for_error(error, events))
+        self.assertIsNone(robot.event_for_error(error, events, earlier=6 * 3600))
+
+    def test_old_messages_are_not_used(self) -> None:
+        error = {"code": "x", "robot_time": "2026-10-27T20:00:00.000"}
+        self.assertIsNone(robot.event_for_error(error, self.EVENTS, earlier=6 * 3600))
+
+    def test_notices_are_recognised_in_the_cloud_messages(self) -> None:
+        found = robot.events(
+            [
+                {
+                    "title": "RobbyCleaning completed",
+                    "from": "Robby",
+                    "time": 2,
+                    "ext": {"alarmType": 30084},
+                },
+                {
+                    "title": "RobbyDone",
+                    "from": "Robby",
+                    "time": 1,
+                    "detailLink": '{"biz":"DeviceRS2ODM","entry":"CleanLog"}',
+                },
+                {
+                    "title": "RobbyThe wheel is suspended",
+                    "from": "Robby",
+                    "time": 0.5,
+                    "detailLink": '{"biz":"DeviceRS2ODM","entry":"index"}',
+                    "ext": {"alarmType": 30109},
+                },
+            ]
+        )
+        self.assertEqual([event["notice"] for event in found], [True, True, False])
+
+    def test_the_error_code_has_a_description_of_its_own(self) -> None:
+        self.assertEqual(
+            robot.error_description("0xe0010025"),
+            "The wheel is suspended, put the robot on the ground",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

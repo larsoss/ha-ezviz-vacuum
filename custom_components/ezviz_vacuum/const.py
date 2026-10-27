@@ -23,8 +23,11 @@ EVENT_LOOKBACK_DAYS = 7
 EVENT_RECENT_DAYS = 2
 # After a new error, look for the app's explanation for this long (seconds),
 # reading the event list at most this often (seconds).
-EVENT_MATCH_SECONDS = 600
-EVENT_FORCE_GAP = 30
+EVENT_MATCH_SECONDS = 300
+EVENT_FORCE_GAP = 10
+# An error that was already active when the integration started has no known
+# start: the newest fault message of this many seconds before it is used.
+EVENT_EARLIER_SECONDS = 6 * 3600
 
 SERVICE_INSPECT = "inspect"
 SERVICE_MAP_DIAGNOSTICS = "map_diagnostics"

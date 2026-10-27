@@ -255,6 +255,16 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(call["headers"]["Accept-Language"], "nl")
         self.assertEqual(found, [{"title": "RobbyX"}])
 
+    def test_fetch_messages_accepts_the_language_by_position_too(self) -> None:
+        self.client._session.request = lambda method, url, **kw: (
+            self.client._session.calls.append({"method": method, "url": url, **kw})
+            or FakeResponse({"meta": {"code": 200}, "message": []})
+        )
+        self.assertEqual(self.api.fetch_messages("ab1234567", "20261025", "nl"), [])
+        self.assertEqual(
+            self.client._session.calls[0]["headers"]["Accept-Language"], "nl"
+        )
+
     def test_unknown_map_layer_is_rejected(self) -> None:
         with self.assertRaises(ValueError):
             self.api.fetch_map_layer("ab1234567", "everything", map_id=2)

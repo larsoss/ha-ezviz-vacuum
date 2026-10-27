@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from datetime import datetime
 from functools import lru_cache
+import json
 import re
 from typing import Any
 
@@ -226,6 +227,20 @@ def _float(value: Any) -> float | None:
         return None
 
 
+# App message codes that report a normal event instead of a fault.
+NOTICE_CODES = frozenset({30084})
+
+
+def _link_entry(link: Any) -> str | None:
+    """Return the page a message links to (``detailLink`` is a JSON string)."""
+    try:
+        value = json.loads(link) if isinstance(link, str) else link
+    except ValueError:
+        return None
+    entry = value.get("entry") if isinstance(value, Mapping) else None
+    return entry if isinstance(entry, str) else None
+
+
 def events(messages: Any) -> list[dict[str, Any]]:
     """Return the app's events, newest first, in a simple shape.
 
@@ -244,6 +259,7 @@ def events(messages: Any) -> list[dict[str, Any]]:
             continue
         millis = _float(message.get("time"))
         extra = message.get("ext")
+        code = extra.get("alarmType") if isinstance(extra, Mapping) else None
         found.append(
             (
                 millis or 0.0,
@@ -251,11 +267,12 @@ def events(messages: Any) -> list[dict[str, Any]]:
                     "text": text,
                     # The time as the app shows it, in the robot's own time zone.
                     "time": message.get("timeStr"),
-                    "code": extra.get("alarmType")
-                    if isinstance(extra, Mapping)
-                    else None,
+                    "code": code,
                     "type": message.get("subType"),
                     "id": message.get("msgId"),
+                    # A finished clean is a notice, not the cause of an error.
+                    "notice": code in NOTICE_CODES
+                    or _link_entry(message.get("detailLink")) == "CleanLog",
                 },
             )
         )
@@ -276,27 +293,41 @@ def event_for_error(
     error: Mapping[str, Any] | None,
     found: list[dict[str, Any]] | None,
     window: float = 180,
+    earlier: float | None = None,
 ) -> dict[str, Any] | None:
     """Return the app message that belongs to a robot error.
 
     The live task only has a code such as ``0xe0010025``; the app sends a
     message with the explanation a few seconds later ("The wheel is
     suspended..."). Both carry the robot's own clock, so they are matched on
-    time: the closest message within ``window`` seconds.
+    time: the fault message closest to the error within ``window`` seconds.
+
+    An error that was already active when the integration started has no
+    known start; with ``earlier`` (seconds) the newest fault message before it
+    is used instead.
     """
     when = _clock(error.get("robot_time")) if error else None
     if when is None:
         return None
     best: dict[str, Any] | None = None
     best_gap: float | None = None
+    newest: dict[str, Any] | None = None
+    newest_at: datetime | None = None
     for event in found or []:
         at = _clock(event.get("time"))
-        if at is None:
+        if at is None or event.get("notice"):
             continue
         gap = abs((at - when).total_seconds())
         if gap <= window and (best_gap is None or gap < best_gap):
             best, best_gap = event, gap
-    return best
+        before = (when - at).total_seconds()
+        if (
+            earlier is not None
+            and -window <= before <= earlier
+            and (newest_at is None or at > newest_at)
+        ):
+            newest, newest_at = event, at
+    return best or newest
 
 
 def is_generic_room_name(raw_name: Any) -> bool:
@@ -559,6 +590,8 @@ ERROR_CODES: dict[str, str] = {
     "413": "Docking failed (did not start from the station)",
     "414": "Leaving the station is blocked",
     "CR_CleanWaterBoxLow": "Clean water tank is low",
+    # RE4: reported 3 seconds before the app's "wheel is suspended" message.
+    "0xe0010025": "The wheel is suspended, put the robot on the ground",
 }
 _CHINESE_ERRORS: dict[str, str] = {
     "拖布盘安装失败": "201",

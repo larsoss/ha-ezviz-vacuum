@@ -175,6 +175,9 @@
       "last_error": {
         "name": "Ostatni błąd"
       },
+      "last_error_time": {
+        "name": "Czas ostatniego błędu"
+      },
       "last_clean_area": {
         "name": "Powierzchnia ostatniego sprzątania"
       },
