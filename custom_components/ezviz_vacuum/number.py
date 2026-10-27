@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Final
 
 from homeassistant.components.number import (
@@ -17,7 +17,14 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import robot
 from .coordinator import EzvizVacuumCoordinator
-from .entity import RobotSettingEntity, reported, sync_room_entities
+from .entity import (
+    RobotSettingEntity,
+    reported,
+    room_device_info,
+    room_devices,
+    room_id_of,
+    sync_room_entities,
+)
 from .settings import (
     FieldSetting,
     MapCleanSetting,
@@ -157,10 +164,26 @@ async def async_setup_entry(
             if description.entity_registry_enabled_default
         },
     )
-    entities.extend(
-        RobotSettingNumber(coordinator, key, description, {"room": name})
-        for key, description, name in rooms
-    )
+    as_devices = room_devices(entry)
+    for key, description, name in rooms:
+        if not as_devices:
+            entities.append(
+                RobotSettingNumber(coordinator, key, description, {"room": name})
+            )
+            continue
+        # On the room's own device the room name is already in the device name.
+        entity = RobotSettingNumber(
+            coordinator,
+            key,
+            replace(
+                description,
+                translation_key=description.translation_key.replace(
+                    "room_", "room_device_", 1
+                ),
+            ),
+        )
+        entity._attr_device_info = room_device_info(coordinator, room_id_of(key), name)
+        entities.append(entity)
     async_add_entities(entities)
 
 

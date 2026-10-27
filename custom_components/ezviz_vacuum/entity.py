@@ -11,7 +11,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import robot
-from .const import DOMAIN
+from .const import CONF_ROOM_DEVICES, DOMAIN
 from .coordinator import EzvizVacuumCoordinator
 from .settings import Setting
 
@@ -107,3 +107,28 @@ def sync_room_entities(
             and item.disabled_by is er.RegistryEntryDisabler.INTEGRATION
         ):
             registry.async_update_entity(item.entity_id, disabled_by=None)
+
+
+def room_devices(entry: ConfigEntry) -> bool:
+    """Whether each room's settings are shown as a device of its own."""
+    return bool(entry.options.get(CONF_ROOM_DEVICES, False))
+
+
+def room_device_info(
+    coordinator: EzvizVacuumCoordinator, room_id: int, room_name: str
+) -> DeviceInfo:
+    """Return the device of one room, linked to the robot."""
+    serial = coordinator.data["serial"]
+    robot_name = robot.device_details(coordinator.data.get("device"))["name"]
+    return DeviceInfo(
+        identifiers={(DOMAIN, f"{serial}_room_{room_id}")},
+        manufacturer="EZVIZ",
+        model="Room",
+        name=f"{robot_name} {room_name}",
+        via_device=(DOMAIN, serial),
+    )
+
+
+def room_id_of(key: str) -> int:
+    """Return the room id of a per-room key such as ``room_8_suction``."""
+    return int(key.split("_")[1])

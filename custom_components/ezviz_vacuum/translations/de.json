@@ -283,6 +283,23 @@
           "time": "Nach dem Intervall",
           "region": "Nach jedem Raum"
         }
+      },
+      "room_device_suction": {
+        "name": "Saugkraft",
+        "state": {
+          "quiet": "Leise",
+          "normal": "Normal",
+          "strong": "Stark",
+          "super": "Max"
+        }
+      },
+      "room_device_water_level": {
+        "name": "Wassermenge",
+        "state": {
+          "low": "Niedrig",
+          "middle": "Mittel",
+          "high": "Hoch"
+        }
       }
     },
     "number": {
@@ -303,6 +320,9 @@
       },
       "voice_volume": {
         "name": "Sprachlautstärke"
+      },
+      "room_device_cleaning_passes": {
+        "name": "Reinigungsdurchgänge"
       }
     },
     "time": {
@@ -441,6 +461,19 @@
         "headers": {
           "name": "Header",
           "description": "Optionale zusätzliche Anfrage-Header."
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Optionen",
+        "data": {
+          "room_devices": "Räume als Geräte"
+        },
+        "data_description": {
+          "room_devices": "Die Einstellungen jedes Raums (Saugkraft, Wassermenge, Durchgänge) als eigenes Gerät anzeigen, verknüpft mit dem Roboter, statt auf der Seite des Roboters."
         }
       }
     }

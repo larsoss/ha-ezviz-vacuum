@@ -15,7 +15,11 @@ from homeassistant.exceptions import (
     HomeAssistantError,
     ServiceValidationError,
 )
-from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import (
+    config_validation as cv,
+    device_registry as dr,
+    entity_registry as er,
+)
 from homeassistant.helpers.service import async_register_admin_service
 from pyezvizapi.exceptions import EzvizAuthTokenExpired, PyEzvizError
 import voluptuous as vol
@@ -101,6 +105,34 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 
+async def _async_options_updated(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Reload so the per-room entities move to or from their room devices."""
+    await hass.config_entries.async_reload(entry.entry_id)
+
+
+def _remove_empty_room_devices(
+    hass: HomeAssistant, entry: ConfigEntry, serial: str
+) -> None:
+    """Remove room devices that no longer hold any entity.
+
+    That happens when the room devices option is turned off (the entities move
+    back to the robot) or a room disappears from the map.
+    """
+    devices = dr.async_get(hass)
+    entities = er.async_get(hass)
+    prefix = f"{serial}_room_"
+    for device in dr.async_entries_for_config_entry(devices, entry.entry_id):
+        if not any(
+            domain == DOMAIN and str(ident).startswith(prefix)
+            for domain, ident in device.identifiers
+        ):
+            continue
+        if not er.async_entries_for_device(
+            entities, device.id, include_disabled_entities=True
+        ):
+            devices.async_remove_device(device.id)
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: EzvizVacuumConfigEntry) -> bool:
     """Set up one robot from a config entry."""
     token = entry.data.get(CONF_TOKEN)
@@ -142,6 +174,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: EzvizVacuumConfigEntry) 
             hass.config_entries.async_schedule_reload(entry.entry_id)
 
     entry.async_on_unload(coordinator.async_add_listener(_reload_when_rooms_change))
+    entry.async_on_unload(entry.add_update_listener(_async_options_updated))
+    _remove_empty_room_devices(hass, entry, coordinator.serial)
     _register_services(hass)
     return True
 

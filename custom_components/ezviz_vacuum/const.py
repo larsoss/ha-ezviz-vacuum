@@ -7,6 +7,8 @@ DOMAIN = "ezviz_vacuum"
 CONF_SERIAL = "serial"
 # The EZVIZ session (session ID, refresh ID, API host); never the password.
 CONF_TOKEN = "token"
+# Option: show each room's settings as its own device, linked to the robot.
+CONF_ROOM_DEVICES = "room_devices"
 # Version 1 entries borrowed the official EZVIZ integration's session.
 CONF_LEGACY_SOURCE_ENTRY_ID = "source_entry_id"
 

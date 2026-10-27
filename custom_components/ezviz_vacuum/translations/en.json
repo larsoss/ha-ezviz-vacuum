@@ -283,6 +283,23 @@
           "time": "After the interval",
           "region": "After each room"
         }
+      },
+      "room_device_suction": {
+        "name": "Suction",
+        "state": {
+          "quiet": "Quiet",
+          "normal": "Normal",
+          "strong": "Strong",
+          "super": "Max"
+        }
+      },
+      "room_device_water_level": {
+        "name": "Water level",
+        "state": {
+          "low": "Low",
+          "middle": "Medium",
+          "high": "High"
+        }
       }
     },
     "number": {
@@ -303,6 +320,9 @@
       },
       "voice_volume": {
         "name": "Voice volume"
+      },
+      "room_device_cleaning_passes": {
+        "name": "Cleaning passes"
       }
     },
     "time": {
@@ -441,6 +461,19 @@
         "headers": {
           "name": "Headers",
           "description": "Optional extra request headers."
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Options",
+        "data": {
+          "room_devices": "Room devices"
+        },
+        "data_description": {
+          "room_devices": "Show each room's settings (suction, water level, passes) as a device of its own, linked to the robot, instead of on the robot's page."
         }
       }
     }

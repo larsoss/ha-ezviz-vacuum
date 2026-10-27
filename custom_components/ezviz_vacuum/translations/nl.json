@@ -283,6 +283,23 @@
           "time": "Na het ingestelde interval",
           "region": "Na elke kamer"
         }
+      },
+      "room_device_suction": {
+        "name": "Zuigkracht",
+        "state": {
+          "quiet": "Stil",
+          "normal": "Normaal",
+          "strong": "Krachtig",
+          "super": "Maximaal"
+        }
+      },
+      "room_device_water_level": {
+        "name": "Waterniveau",
+        "state": {
+          "low": "Laag",
+          "middle": "Gemiddeld",
+          "high": "Hoog"
+        }
       }
     },
     "number": {
@@ -303,6 +320,9 @@
       },
       "voice_volume": {
         "name": "Spraakvolume"
+      },
+      "room_device_cleaning_passes": {
+        "name": "Aantal schoonmaakrondes"
       }
     },
     "time": {
@@ -441,6 +461,19 @@
         "headers": {
           "name": "Headers",
           "description": "Optionele extra verzoekheaders."
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Opties",
+        "data": {
+          "room_devices": "Ruimtes als apparaten"
+        },
+        "data_description": {
+          "room_devices": "Toon de instellingen van elke ruimte (zuigkracht, waterniveau, schoonmaakbeurten) als een eigen apparaat, gekoppeld aan de robot, in plaats van op de pagina van de robot."
         }
       }
     }

@@ -283,6 +283,23 @@
           "time": "Tras el intervalo",
           "region": "Después de cada habitación"
         }
+      },
+      "room_device_suction": {
+        "name": "Succión",
+        "state": {
+          "quiet": "Silencioso",
+          "normal": "Normal",
+          "strong": "Fuerte",
+          "super": "Máx."
+        }
+      },
+      "room_device_water_level": {
+        "name": "Nivel de agua",
+        "state": {
+          "low": "Bajo",
+          "middle": "Medio",
+          "high": "Alto"
+        }
       }
     },
     "number": {
@@ -303,6 +320,9 @@
       },
       "voice_volume": {
         "name": "Volumen de voz"
+      },
+      "room_device_cleaning_passes": {
+        "name": "Pasadas de limpieza"
       }
     },
     "time": {
@@ -441,6 +461,19 @@
         "headers": {
           "name": "Cabeceras",
           "description": "Cabeceras adicionales opcionales."
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Opciones",
+        "data": {
+          "room_devices": "Habitaciones como dispositivos"
+        },
+        "data_description": {
+          "room_devices": "Mostrar los ajustes de cada habitación (succión, nivel de agua, pasadas) como un dispositivo propio, vinculado al robot, en lugar de en la página del robot."
         }
       }
     }
