@@ -2,13 +2,13 @@
 
 ## 1.1.1b12 (beta)
 
+Changes since 1.1.1b10 (1.1.1b11 was not published).
+
 - New option **Room devices** (Settings → Devices & services → EZVIZ Robot
   Vacuum → Configure): each room's suction, water level and passes become a
   device of their own, linked to the robot, instead of being listed on the
   robot's page. Off by default. Entity IDs stay the same; turning it off moves
   the entities back and removes the empty room devices (#8).
-
-## 1.1.1b11 (beta)
 
 - Last event and Last error are in Home Assistant's language, like the app;
   they came in English because the default request headers ask for English
