@@ -218,9 +218,10 @@ SENSORS: Final = (
     RobotSensorDescription(
         key="current_task",
         translation_key="current_task",
-        value_fn=lambda data: robot.current_task(data.get("task")) or None,
+        value_fn=lambda data: robot.display_task(data.get("task")) or None,
         attributes_fn=lambda data: {
-            "previous_task": robot.task_data(data.get("task")).get("preTask")
+            "robot_task": robot.current_task(data.get("task")) or None,
+            "previous_task": robot.task_data(data.get("task")).get("preTask"),
         },
         icon="mdi:robot-vacuum-variant",
     ),

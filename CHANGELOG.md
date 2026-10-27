@@ -34,6 +34,12 @@
 - A "Last error time" sensor (timestamp) changes with every new error. The text
   of "Last error" stays the same when the same error comes back, so Home
   Assistant does not show a new entry for it.
+- A docked RE4 that waits for the off-peak hours is shown as `waiting_charge` by
+  "Current task" instead of `charging` (the original task name is in the
+  `robot_task` attribute), so it agrees with "Charging status".
+- "On base station" is on while the robot is charging or on a station task: the
+  RE4 reports `isOnBasestation` as 0 while it sits on its dock. Numeric 1/0
+  flags now also count for the docked activity.
 
 ## 1.1.1b9 (beta)
 

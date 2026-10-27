@@ -541,5 +541,59 @@ class ActiveErrorTests(unittest.TestCase):
         )
 
 
+class DockedRobotTests(unittest.TestCase):
+    """What the RE4 reports while it sits on its dock waiting to charge."""
+
+    @staticmethod
+    def _task(name, flag=0, status=None):
+        data = {"currentTask": name, "inCharging": 0, "isOnBasestation": flag}
+        if status is not None:
+            data["chargingTaskInfo"] = {"status": status}
+        return {"data": data}
+
+    def test_waiting_to_charge_is_not_shown_as_charging(self) -> None:
+        task = self._task("charging", status="waitingCharge")
+        self.assertEqual(robot.display_task(task), "waiting_charge")
+        # The task itself is unchanged: the robot is still docked.
+        self.assertEqual(robot.current_task(task), "charging")
+        self.assertEqual(robot.activity(task), robot.ACTIVITY_DOCKED)
+
+    def test_real_charging_and_other_tasks_keep_their_name(self) -> None:
+        self.assertEqual(
+            robot.display_task(self._task("charging", status="charging")), "charging"
+        )
+        self.assertEqual(robot.display_task(self._task("charging")), "charging")
+        self.assertEqual(robot.display_task(self._task("clean")), "clean")
+        self.assertEqual(robot.display_task(None), "")
+
+    def test_a_charging_robot_is_on_the_station_although_the_flag_says_0(self) -> None:
+        self.assertIs(robot.on_base_station(self._task("charging", 0)), True)
+        self.assertIs(
+            robot.on_base_station(self._task("charging", 0, "waitingCharge")), True
+        )
+
+    def test_the_flag_still_counts(self) -> None:
+        self.assertIs(robot.on_base_station(self._task("standby", 1)), True)
+        self.assertIs(robot.on_base_station(self._task("standby", True)), True)
+
+    def test_a_robot_on_the_floor_is_not_on_the_station(self) -> None:
+        self.assertIs(robot.on_base_station(self._task("clean", 0)), False)
+        self.assertIs(robot.on_base_station(self._task("recharge", 0)), False)
+        self.assertIs(robot.on_base_station(self._task("backcharge", 0)), False)
+
+    def test_station_tasks_count_as_docked(self) -> None:
+        self.assertIs(robot.on_base_station(self._task("washmop", 0)), True)
+
+    def test_no_information(self) -> None:
+        self.assertIsNone(robot.on_base_station(None))
+        self.assertIsNone(robot.on_base_station({"data": {"currentTask": ""}}))
+
+    def test_a_numeric_flag_makes_a_resting_robot_docked(self) -> None:
+        self.assertEqual(
+            robot.activity(self._task("standby", 1)), robot.ACTIVITY_DOCKED
+        )
+        self.assertEqual(robot.activity(self._task("standby", 0)), robot.ACTIVITY_IDLE)
+
+
 if __name__ == "__main__":
     unittest.main()

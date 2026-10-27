@@ -544,6 +544,48 @@ def charging_status(task: Mapping[str, Any] | None) -> str | None:
     return _CAMEL_BOUNDARY.sub("_", status.strip()).lower()
 
 
+def _flag(value: Any) -> bool | None:
+    """Read a yes/no value that some models report as 0/1."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    return None
+
+
+def display_task(task: Mapping[str, Any] | None) -> str:
+    """Return the task name as it should be shown.
+
+    A docked RE4 is on the ``charging`` task even while it waits for the
+    off-peak hours; it is then shown as ``waiting_charge``, like the charging
+    status, because it is not charging.
+    """
+    name = current_task(task)
+    if name.replace("_", "").casefold() == "charging" and (
+        charging_status(task) == "waiting_charge"
+    ):
+        return "waiting_charge"
+    return name
+
+
+def on_base_station(task: Mapping[str, Any] | None) -> bool | None:
+    """Return whether the robot is on its base station.
+
+    The RE4 reports ``isOnBasestation`` as 0 while it sits on the dock, so a
+    task that only happens on the dock (charging, washing, drying, ...) counts
+    as being on the station as well.
+    """
+    flag = _flag(task_data(task).get("isOnBasestation"))
+    if flag:
+        return True
+    name = current_task(task).replace("_", "").casefold()
+    if "charg" in name and not any(word in name for word in _RETURN_WORDS):
+        return True
+    if any(word in name for word in _STATION_WORDS):
+        return True
+    return flag
+
+
 def activity(
     task: Mapping[str, Any] | None, device: Mapping[str, Any] | None = None
 ) -> str:
@@ -552,7 +594,7 @@ def activity(
         return ACTIVITY_ERROR
     data = task_data(task)
     name = current_task(task).replace("_", "").casefold()
-    on_station = data.get("isOnBasestation") is True
+    on_station = _flag(data.get("isOnBasestation")) is True
 
     if "pause" in name or "suspend" in name or task_paused(task):
         return ACTIVITY_PAUSED
