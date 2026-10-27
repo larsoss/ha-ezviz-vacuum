@@ -217,6 +217,30 @@ def room_clean_configs(
     return []
 
 
+def setting_rooms(
+    device: Mapping[str, Any] | None,
+    map_id: int | None,
+    language: str | None = "en",
+    names: Mapping[int, str] | None = None,
+) -> list[tuple[str, str]]:
+    """Return ``(room_id, name)`` for the rooms that get per-room settings.
+
+    ``names`` are the room names of the map itself (id -> name). The robot's
+    room cleaning settings can still list rooms that were merged or deleted
+    in the app, and carry no names; with the map's names only the rooms that
+    exist on the map and have a name there are kept, under that name.
+    """
+    found = rooms(device, map_id, language)
+    if not names:
+        return found
+    named = [
+        (room_id, names[int(room_id)])
+        for room_id, _ in found
+        if str(room_id).isdigit() and int(room_id) in names
+    ]
+    return named or found
+
+
 def clean_mode(device: Mapping[str, Any] | None) -> str | None:
     """Return the configured sweep/mop mode, if it is a known value."""
     mode = feature(device, "SweeperCleanTask", "SweepMopMode")

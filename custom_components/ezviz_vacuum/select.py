@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Final
 
@@ -80,7 +81,10 @@ SELECTS: Final[tuple[RobotSelectDescription, ...]] = (
 
 
 def room_selects(
-    device: Any, task: Any, language: str | None = "en"
+    device: Any,
+    task: Any,
+    language: str | None = "en",
+    names: Mapping[int, str] | None = None,
 ) -> list[tuple[str, RobotSelectDescription, str]]:
     """Return ``(key, description, room name)`` for every room of the active map."""
     map_id = robot.active_map_id(device, task)
@@ -88,7 +92,7 @@ def room_selects(
         str(room.get("roomID")) for room in robot.room_clean_configs(device, map_id)
     }
     result = []
-    for room_id, name in robot.rooms(device, map_id, language):
+    for room_id, name in robot.setting_rooms(device, map_id, language, names):
         if room_id not in configured:
             continue
         for field, suffix, options, icon in (
@@ -125,6 +129,7 @@ async def async_setup_entry(
             coordinator.data.get("device"),
             coordinator.data.get("task"),
             hass.config.language,
+            coordinator.room_names,
         )
     )
     async_add_entities(entities)
