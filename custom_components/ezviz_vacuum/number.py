@@ -182,7 +182,9 @@ async def async_setup_entry(
                 ),
             ),
         )
-        entity._attr_device_info = room_device_info(coordinator, room_id_of(key), name)
+        entity._attr_device_info = room_device_info(
+            hass, entry, coordinator, room_id_of(key), name
+        )
         entities.append(entity)
     async_add_entities(entities)
 

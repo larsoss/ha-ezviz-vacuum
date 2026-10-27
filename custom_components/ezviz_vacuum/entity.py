@@ -6,7 +6,7 @@ from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -115,17 +115,29 @@ def room_devices(entry: ConfigEntry) -> bool:
 
 
 def room_device_info(
-    coordinator: EzvizVacuumCoordinator, room_id: int, room_name: str
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    coordinator: EzvizVacuumCoordinator,
+    room_id: int,
+    room_name: str,
 ) -> DeviceInfo:
-    """Return the device of one room, linked to the robot."""
+    """Return the device of one room, linked to the robot's device."""
     serial = coordinator.data["serial"]
-    robot_name = robot.device_details(coordinator.data.get("device"))["name"]
+    details = robot.device_details(coordinator.data.get("device"))
+    # The robot's device may not exist yet when this platform loads first.
+    robot_device = dr.async_get(hass).async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, serial)},
+        manufacturer="EZVIZ",
+        model=details["model"],
+        name=details["name"],
+    )
     return DeviceInfo(
         identifiers={(DOMAIN, f"{serial}_room_{room_id}")},
         manufacturer="EZVIZ",
         model="Room",
-        name=f"{robot_name} {room_name}",
-        via_device=(DOMAIN, serial),
+        name=f"{details['name']} {room_name}",
+        via_device_id=robot_device.id,
     )
 
 
