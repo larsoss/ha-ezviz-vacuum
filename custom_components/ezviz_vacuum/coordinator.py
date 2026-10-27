@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import partial
 from time import monotonic
 from typing import Any
@@ -32,6 +32,8 @@ from .const import (
     DEFAULT_SCAN_INTERVAL,
     DEVICE_REFRESH_INTERVAL,
     DOMAIN,
+    EVENT_LOOKBACK_DAYS,
+    EVENT_RECENT_DAYS,
 )
 from .mapdata import build_layers, decode_room_names
 from .maprender import render_svg
@@ -71,6 +73,9 @@ class EzvizVacuumCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.camera_snapshot: bytes | None = None
         self.camera_snapshot_updated: datetime | None = None
         self._clean_log: dict[str, Any] | None = None
+        # The app's event list ("Events" tab), newest first; None until read.
+        self._events: list[dict[str, Any]] | None = None
+        self._events_fetched: float | None = None
         # The last error seen in the live task, for robots without an error
         # history (RE4).
         self._last_exception: dict[str, Any] | None = None
@@ -180,6 +185,7 @@ class EzvizVacuumCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
 
         await self._async_refresh_clean_log(force=task_changed)
+        await self._async_refresh_events(force=task_changed)
         self._remember_exception(task)
 
         return {
@@ -188,6 +194,7 @@ class EzvizVacuumCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "task": task,
             "task_error": task_error,
             "clean_log": self._clean_log,
+            "events": self._events,
             "last_exception": self._last_exception,
         }
 
@@ -232,6 +239,50 @@ class EzvizVacuumCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             ) from err
         except Exception as err:  # noqa: BLE001 - totals are optional
             self.logger.debug("Could not read the clean log: %s", err)
+
+    async def _async_refresh_events(self, *, force: bool = False) -> None:
+        """Read the app's event list now and then, and when a task changes.
+
+        The first read looks back a week for the newest event; later reads only
+        the last two days, and keep the previous events when nothing new is
+        found. Failures keep the last events.
+        """
+        if self.robot_api is None or not self.serial:
+            return
+        fetched = self._events_fetched
+        if (
+            not force
+            and fetched is not None
+            and monotonic() - fetched < CLEAN_LOG_REFRESH_INTERVAL
+        ):
+            return
+        self._events_fetched = monotonic()
+        from homeassistant.util import dt as dt_util
+
+        today = dt_util.now().date()
+        days = EVENT_LOOKBACK_DAYS if self._events is None else EVENT_RECENT_DAYS
+        found: list[dict[str, Any]] = []
+        try:
+            for back in range(days):
+                day = (today - timedelta(days=back)).strftime("%Y%m%d")
+                messages = await self.hass.async_add_executor_job(
+                    self.robot_api.fetch_messages,
+                    self.serial,
+                    day,
+                    self.hass.config.language,
+                )
+                found = robot.events(messages)
+                if found:
+                    break
+        except EzvizAuthTokenExpired as err:
+            raise ConfigEntryAuthFailed(
+                "The EZVIZ login has expired; please sign in again"
+            ) from err
+        except Exception as err:  # noqa: BLE001 - events are optional
+            self.logger.debug("Could not read the event list: %s", err)
+            return
+        if found or self._events is None:
+            self._events = found
 
     async def _async_refresh_map(self, task: Mapping[str, Any]) -> None:
         """Fetch map layers whose version changed and redraw the map.

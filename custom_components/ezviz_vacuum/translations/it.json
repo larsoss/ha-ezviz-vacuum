@@ -163,6 +163,9 @@
           "charging": "In carica"
         }
       },
+      "last_event": {
+        "name": "Ultimo evento"
+      },
       "task_duration": {
         "name": "Durata dell'attività"
       },

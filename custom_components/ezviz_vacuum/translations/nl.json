@@ -163,6 +163,9 @@
           "charging": "Aan het opladen"
         }
       },
+      "last_event": {
+        "name": "Laatste gebeurtenis"
+      },
       "task_duration": {
         "name": "Taakduur"
       },

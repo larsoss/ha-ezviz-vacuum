@@ -312,6 +312,42 @@ class EzvizVacuumApi:
         value = result.get(MAP_LAYERS[layer])
         return value if isinstance(value, dict) else {}
 
+    def fetch_messages(
+        self, serial: str, day: str, *, language: str | None = None
+    ) -> list[dict[str, Any]]:
+        """Read the app's event list ("Events" tab) for one day (``YYYYMMDD``).
+
+        This is the message list of the EZVIZ app, with faults such as a stuck
+        brush and notices such as a finished clean; it only reads data. The
+        text comes in the language sent in ``language``.
+        """
+        response = self._cloud.request(
+            "GET",
+            "/v3/unifiedmsg/list",
+            params={
+                "serials": serial.upper(),
+                "stype": "92",
+                "limit": 50,
+                "date": day,
+                "endTime": "",
+            },
+            headers={"Accept-Language": language} if language else None,
+        )
+        response.raise_for_status()
+        result = response.json()
+        if not isinstance(result, dict):
+            raise EzvizVacuumApiError("EZVIZ returned an invalid event list")
+        meta = result.get("meta")
+        code = meta.get("code") if isinstance(meta, dict) else None
+        if code not in (None, 0, 200, "0", "200"):
+            raise EzvizVacuumApiError(
+                f"unifiedmsg/list: {rejection_reason(result, code)}"
+            )
+        messages = result.get("message")
+        if not isinstance(messages, list):
+            return []
+        return [message for message in messages if isinstance(message, dict)]
+
     def fetch_clean_log(self, serial: str) -> dict[str, Any]:
         """Read the cloud clean log: recent cleans and lifetime totals.
 

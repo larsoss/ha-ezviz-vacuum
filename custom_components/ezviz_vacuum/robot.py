@@ -217,6 +217,52 @@ def room_clean_configs(
     return []
 
 
+def _float(value: Any) -> float | None:
+    if isinstance(value, bool):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def events(messages: Any) -> list[dict[str, Any]]:
+    """Return the app's events, newest first, in a simple shape.
+
+    The cloud puts the device name in front of the text (``RobbyCleaning
+    completed``); it is left out here.
+    """
+    found: list[tuple[float, dict[str, Any]]] = []
+    for message in _as_list(messages):
+        if not isinstance(message, Mapping):
+            continue
+        text = str(message.get("title") or "").strip()
+        sender = str(message.get("from") or "").strip()
+        if sender and text.startswith(sender):
+            text = text[len(sender) :].strip()
+        if not text:
+            continue
+        millis = _float(message.get("time"))
+        extra = message.get("ext")
+        found.append(
+            (
+                millis or 0.0,
+                {
+                    "text": text,
+                    # The time as the app shows it, in the robot's own time zone.
+                    "time": message.get("timeStr"),
+                    "code": extra.get("alarmType")
+                    if isinstance(extra, Mapping)
+                    else None,
+                    "type": message.get("subType"),
+                    "id": message.get("msgId"),
+                },
+            )
+        )
+    found.sort(key=lambda item: item[0], reverse=True)
+    return [event for _, event in found]
+
+
 def is_generic_room_name(raw_name: Any) -> bool:
     """Return whether a room still has the app's default name ("Room 13").
 

@@ -121,6 +121,27 @@ def _charging_status(data: Data) -> str | None:
     return status if status in CHARGING_STATES else None
 
 
+def _last_event(data: Data) -> dict[str, Any] | None:
+    events = data.get("events")
+    return events[0] if isinstance(events, list) and events else None
+
+
+def _last_event_attributes(data: Data) -> dict[str, Any] | None:
+    event = _last_event(data)
+    if event is None:
+        return None
+    events = data.get("events") or []
+    return {
+        "time": event.get("time"),
+        "code": event.get("code"),
+        "type": event.get("type"),
+        "id": event.get("id"),
+        "recent": [
+            {"time": item.get("time"), "text": item.get("text")} for item in events[:5]
+        ],
+    }
+
+
 SENSORS: Final = (
     RobotSensorDescription(
         key="battery",
@@ -198,6 +219,13 @@ SENSORS: Final = (
         device_class=SensorDeviceClass.ENUM,
         options=list(CHARGING_STATES),
         icon="mdi:battery-clock-outline",
+    ),
+    RobotSensorDescription(
+        key="last_event",
+        translation_key="last_event",
+        value_fn=lambda data: (_last_event(data) or {}).get("text", "")[:255] or None,
+        attributes_fn=_last_event_attributes,
+        icon="mdi:message-alert-outline",
     ),
     RobotSensorDescription(
         key="task_duration",

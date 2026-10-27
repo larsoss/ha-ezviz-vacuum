@@ -285,5 +285,137 @@ class HistoryTests(unittest.TestCase):
         self.assertIsNone(robot.last_clean(device))
 
 
+class GhostRoomTests(unittest.TestCase):
+    """Rooms the app made up, and entities left behind by older versions."""
+
+    def test_default_names_are_generic(self) -> None:
+        for raw in ("#@FangJ#13", "#@FangJ#", "#@FangJ#4", "", None, "  "):
+            self.assertTrue(robot.is_generic_room_name(raw), raw)
+
+    def test_real_names_are_not_generic(self) -> None:
+        for raw in ("#@KeT#", "#@ChuF#", "Tuin", "Woonkamer", "Room 13"):
+            self.assertFalse(robot.is_generic_room_name(raw), raw)
+
+    def test_only_unprovided_room_entities_are_stale(self) -> None:
+        registered = [
+            "BC1_room_0_suction",
+            "BC1_room_4_suction",
+            "BC1_room_4_water_level",
+            "BC1_room_7_cleaning_passes",
+            "BC1_room_settings",
+            "BC1_battery",
+        ]
+        keep = {"BC1_room_0_suction"}
+        self.assertEqual(
+            robot.stale_room_entities(registered, keep),
+            [
+                "BC1_room_4_suction",
+                "BC1_room_4_water_level",
+                "BC1_room_7_cleaning_passes",
+            ],
+        )
+
+    def test_nothing_is_stale_when_everything_is_provided(self) -> None:
+        registered = ["BC1_room_0_suction", "BC1_room_12_water_level"]
+        self.assertEqual(robot.stale_room_entities(registered, set(registered)), [])
+
+    def test_rooms_follow_the_map_only_when_limited_by_it(self) -> None:
+        names = {0: "Kitchen", 1: "Living room"}
+        self.assertTrue(
+            robot.rooms_follow_map([("0", "Kitchen"), ("1", "Living room")], names)
+        )
+        # Fell back to every configured room: nothing may be removed.
+        self.assertFalse(
+            robot.rooms_follow_map([("0", "Room 0"), ("4", "Room 4")], names)
+        )
+        self.assertFalse(robot.rooms_follow_map([("0", "Room 0")], {}))
+        self.assertFalse(robot.rooms_follow_map([], names))
+
+
+class ChargingStatusTests(unittest.TestCase):
+    """A docked robot is on the ``charging`` task even while it waits."""
+
+    @staticmethod
+    def _task(status):
+        data = {"currentTask": "charging", "inCharging": 0}
+        if status is not None:
+            data["chargingTaskInfo"] = {"status": status}
+        return {"data": data}
+
+    def test_waiting_for_the_off_peak_hours(self) -> None:
+        self.assertEqual(
+            robot.charging_status(self._task("waitingCharge")), "waiting_charge"
+        )
+
+    def test_charging(self) -> None:
+        self.assertEqual(robot.charging_status(self._task("charging")), "charging")
+
+    def test_no_status(self) -> None:
+        for task in (self._task(None), None, {}, {"data": {}}):
+            self.assertIsNone(robot.charging_status(task))
+        self.assertIsNone(robot.charging_status(self._task("")))
+        self.assertIsNone(
+            robot.charging_status({"data": {"chargingTaskInfo": "waitingCharge"}})
+        )
+
+    def test_unknown_status_is_passed_on_in_snake_case(self) -> None:
+        self.assertEqual(robot.charging_status(self._task("chargeFull")), "charge_full")
+
+    def test_the_task_name_alone_still_means_docked(self) -> None:
+        self.assertEqual(
+            robot.activity(self._task("waitingCharge")), robot.ACTIVITY_DOCKED
+        )
+
+
+class EventTests(unittest.TestCase):
+    """The app's event list, as the cloud returns it."""
+
+    MESSAGES = [
+        {
+            "subType": 2401,
+            "msgId": "MVOADPKDN81_4QB3XF600_AB1234567_0",
+            "title": "RobbyAnti-drop sensor blocked, please wipe it",
+            "from": "Robby",
+            "time": 1792960486573,
+            "timeStr": "2026-10-25 20:34:46",
+            "ext": {"alarmName": "Robby", "alarmType": 30097},
+        },
+        {
+            "subType": 2401,
+            "msgId": "MVO91ZB8N8D_4QB21N800_AB1234567_0",
+            "title": "RobbyThe wheel is suspended, please put the device on the ground",
+            "from": "Robby",
+            "time": 1792958259716,
+            "timeStr": "2026-10-25 19:57:39",
+            "ext": {"alarmName": "Robby", "alarmType": 30109},
+        },
+    ]
+
+    def test_the_device_name_is_left_out_of_the_text(self) -> None:
+        found = robot.events(self.MESSAGES)
+        self.assertEqual(found[0]["text"], "Anti-drop sensor blocked, please wipe it")
+        self.assertEqual(found[0]["code"], 30097)
+        self.assertEqual(found[0]["type"], 2401)
+        self.assertEqual(found[0]["id"], "MVOADPKDN81_4QB3XF600_AB1234567_0")
+
+    def test_newest_event_comes_first(self) -> None:
+        found = robot.events(list(reversed(self.MESSAGES)))
+        self.assertEqual(found[0]["code"], 30097)
+        self.assertEqual(found[1]["code"], 30109)
+
+    def test_time_is_the_one_the_app_shows(self) -> None:
+        # The cloud's epoch is the robot's local time read as UTC, so the
+        # readable time string is used.
+        self.assertEqual(robot.events(self.MESSAGES)[0]["time"], "2026-10-25 20:34:46")
+
+    def test_text_without_the_device_name_is_kept(self) -> None:
+        found = robot.events([{"title": "Cleaning completed", "from": "Robby"}])
+        self.assertEqual(found[0]["text"], "Cleaning completed")
+
+    def test_empty_and_odd_input(self) -> None:
+        for value in (None, [], "x", [{"title": ""}], [None, 3], [{"from": "Robby"}]):
+            self.assertEqual(robot.events(value), [])
+
+
 if __name__ == "__main__":
     unittest.main()

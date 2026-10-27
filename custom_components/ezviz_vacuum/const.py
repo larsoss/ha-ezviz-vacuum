@@ -17,6 +17,10 @@ ACTIVE_SCAN_INTERVAL = timedelta(seconds=10)
 DEVICE_REFRESH_INTERVAL = 300
 # The cloud clean log (lifetime totals) is read this often, and after a clean.
 CLEAN_LOG_REFRESH_INTERVAL = 1800
+# Days to look back for the newest event of the app's event list; later
+# refreshes only need the last two days.
+EVENT_LOOKBACK_DAYS = 7
+EVENT_RECENT_DAYS = 2
 
 SERVICE_INSPECT = "inspect"
 SERVICE_MAP_DIAGNOSTICS = "map_diagnostics"

@@ -163,6 +163,9 @@
           "charging": "Lädt"
         }
       },
+      "last_event": {
+        "name": "Letztes Ereignis"
+      },
       "task_duration": {
         "name": "Aufgabendauer"
       },

@@ -1,5 +1,29 @@
 # Changelog
 
+## Unreleased
+
+- Per-room suction, water and passes work on the RE4: like its app, the
+  integration sends every room of the map in one `ModifyRoomCustomCleanCfgBatch`
+  call, instead of the one-room `SetRoomCustomCleanCfg` the robot refused with
+  code 1048579. Rooms left over in the settings but not on the map are left out.
+  A model that refuses one form of the call is tried with the other.
+- Per-room settings are created only for rooms that are on the map and have a
+  name there, under that name.
+- Per-room entities of rooms that are no longer on the map (merged or deleted in
+  the app) are removed when the integration loads. Rooms that still have the
+  app's default name ("Room 13") are often not real rooms; their entities are
+  created disabled, and are enabled again once the room gets a name in the app
+  (entities you disabled yourself stay disabled). The integration reloads by
+  itself when the rooms of the map change.
+- A "Charging status" sensor shows whether the robot is waiting to charge (the
+  RE4 waits for the off-peak hours while its task is already "charging") or
+  charging.
+- A "Last event" sensor shows the newest message of the EZVIZ app's event list
+  (faults such as "Side brush stuck" and notices such as "Cleaning completed"),
+  in Home Assistant's language, with the time, the code and the last five
+  events as attributes. It is read from the cloud's message list together with
+  the clean log.
+
 ## 1.1.1b9 (beta)
 
 Changes since 1.1.1b6 (1.1.1b7 and 1.1.1b8 were not published).
