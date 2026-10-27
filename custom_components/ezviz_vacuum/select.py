@@ -92,7 +92,9 @@ def room_selects(
         str(room.get("roomID")) for room in robot.room_clean_configs(device, map_id)
     }
     result = []
-    for room_id, name in robot.setting_rooms(device, map_id, language, names):
+    on_map = robot.setting_rooms(device, map_id, language, names)
+    room_ids = tuple(int(room_id) for room_id, _ in on_map if room_id in configured)
+    for room_id, name in on_map:
         if room_id not in configured:
             continue
         for field, suffix, options, icon in (
@@ -104,7 +106,7 @@ def room_selects(
                 translation_key=f"room_{suffix}",
                 icon=icon,
                 options=list(options),
-                setting=RoomCleanSetting(int(room_id), field),
+                setting=RoomCleanSetting(int(room_id), field, room_ids),
             )
             result.append((description.key, description, name))
     return result

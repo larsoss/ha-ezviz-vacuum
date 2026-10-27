@@ -228,10 +228,16 @@ class MapCleanSetting(Setting):
 
 @dataclass(frozen=True)
 class RoomCleanSetting(Setting):
-    """A field of one room in ``SweeperMapMgr/RoomCustomCleanCfg``."""
+    """A field of one room in ``SweeperMapMgr/RoomCustomCleanCfg``.
+
+    ``room_ids`` are the rooms of the map. The RE4 app changes the settings of
+    all of them in one call; rooms that were removed from the map but linger
+    in the robot's settings are left out, like the app does.
+    """
 
     room_id: int
     field: str
+    room_ids: tuple[int, ...] = ()
 
     def _entries(self, device: Any) -> list[Any]:
         value = feature(device, "SweeperMapMgr", "RoomCustomCleanCfg")
@@ -244,19 +250,65 @@ class RoomCleanSetting(Setting):
                 return room.get(self.field)
         return None
 
-    def action(self, device: Any, task: Any, value: Any) -> Write | None:
+    def _single(self, device: Any, task: Any, value: Any) -> Write:
+        """One room at a time (RS20)."""
         map_id = robot.active_map_id(device, task)
         for room in robot.room_clean_configs(device, map_id):
             if room.get("roomID") == self.room_id:
                 payload = {"mapID": map_id, "roomID": self.room_id}
                 # Like the app: send the room's settings, leaving out the
-                # ones this robot does not have (the RE4 has no cleanTimes).
+                # ones this robot does not have.
                 for field in ("fanMode", "waterQuantity", "cleanTimes"):
                     if room.get(field) is not None:
                         payload[field] = room[field]
                 payload[self.field] = value
                 return "SweeperMapMgr", "SetRoomCustomCleanCfg", payload
         raise ValueError(f"Room {self.room_id} has no cleaning settings")
+
+    def _batch(self, device: Any, task: Any, value: Any) -> Write:
+        """Every room of the map in one call (RE4, as the app sends it)."""
+        map_id = robot.active_map_id(device, task)
+        configs = robot.room_clean_configs(device, map_id)
+        if not any(room.get("roomID") == self.room_id for room in configs):
+            raise ValueError(f"Room {self.room_id} has no cleaning settings")
+        rooms = []
+        for room in configs:
+            room_id = room.get("roomID")
+            if self.room_ids and room_id not in self.room_ids:
+                continue
+            entry: dict[str, Any] = {
+                "regionType": room.get("regionType") or "room",
+                "roomID": room_id,
+                "customRegionID": room.get("customRegionID") or 0,
+            }
+            for field in ("fanMode", "waterQuantity", "cleanTimes"):
+                if room.get(field) is not None:
+                    entry[field] = room[field]
+            if room_id == self.room_id:
+                entry[self.field] = value
+            rooms.append(entry)
+        payload = {"value": {"mapID": map_id, "room": rooms}}
+        return "SweeperMapMgr", "ModifyRoomCustomCleanCfgBatch", payload
+
+    @staticmethod
+    def _sends_all_rooms(device: Any) -> bool:
+        """Whether this model changes room settings for the whole map at once.
+
+        Models without a region list (the RE4) do; the RS20 sends one room.
+        """
+        return not isinstance(
+            feature(device, "SweeperMapMgr", "RegionBasicInfo"), Mapping
+        )
+
+    def action(self, device: Any, task: Any, value: Any) -> Write | None:
+        if self._sends_all_rooms(device):
+            return self._batch(device, task, value)
+        return self._single(device, task, value)
+
+    def fallback_action(self, device: Any, task: Any, value: Any) -> Write | None:
+        if self._sends_all_rooms(device):
+            return self._single(device, task, value)
+        return self._batch(device, task, value)
 
     def write(self, device: Any, task: Any, value: Any) -> Write:
         map_id = robot.active_map_id(device, task)

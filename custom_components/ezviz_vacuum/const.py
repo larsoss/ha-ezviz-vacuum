@@ -57,6 +57,12 @@ WRITABLE_FEATURES: frozenset[tuple[str, str]] = frozenset(
 # Robot actions the entities may send. Map cleaning settings are changed this
 # way (as the EZVIZ app does); writing the stored feature does not reach the
 # robot.
+# The two ways models change the cleaning settings of a room: the RS20 sends one
+# room, the RE4 sends every room of the map at once.
+ROOM_SETTING_ACTIONS: frozenset[str] = frozenset(
+    {"SetRoomCustomCleanCfg", "ModifyRoomCustomCleanCfgBatch"}
+)
+
 SETTING_ACTIONS: frozenset[tuple[str, str]] = frozenset(
     {
         ("SweeperMapMgr", "SetFanModeOfStdClean"),
@@ -64,6 +70,7 @@ SETTING_ACTIONS: frozenset[tuple[str, str]] = frozenset(
         ("SweeperMapMgr", "SetCleanTimesOfStdClean"),
         ("SweeperMapMgr", "SetCleanCfg"),
         ("SweeperMapMgr", "SetRoomCustomCleanCfg"),
+        ("SweeperMapMgr", "ModifyRoomCustomCleanCfgBatch"),
         # RE7 Edge: suction and water for the whole map.
         ("SweeperMapMgr", "SetGlobalCleanCfg"),
     }

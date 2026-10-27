@@ -102,6 +102,8 @@ def room_numbers(
     configured = {
         str(room.get("roomID")) for room in robot.room_clean_configs(device, map_id)
     }
+    on_map = robot.setting_rooms(device, map_id, language, names)
+    room_ids = tuple(int(room_id) for room_id, _ in on_map if room_id in configured)
     return [
         (
             f"room_{room_id}_cleaning_passes",
@@ -111,11 +113,11 @@ def room_numbers(
                 icon="mdi:repeat",
                 native_min_value=1,
                 native_max_value=MAX_PASSES,
-                setting=RoomCleanSetting(int(room_id), "cleanTimes"),
+                setting=RoomCleanSetting(int(room_id), "cleanTimes", room_ids),
             ),
             name,
         )
-        for room_id, name in robot.setting_rooms(device, map_id, language, names)
+        for room_id, name in on_map
         if room_id in configured
     ]
 

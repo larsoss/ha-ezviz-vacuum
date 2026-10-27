@@ -11,7 +11,12 @@ import logging
 from typing import Any
 import zlib
 
-from .const import CLEAN_MODES, SETTING_ACTIONS, WRITABLE_FEATURES
+from .const import (
+    CLEAN_MODES,
+    ROOM_SETTING_ACTIONS,
+    SETTING_ACTIONS,
+    WRITABLE_FEATURES,
+)
 
 
 class EzvizVacuumApiError(Exception):
@@ -73,6 +78,7 @@ class EzvizVacuumApi:
         group: str,
         primary: Callable[[], dict[str, Any]],
         alternative: Callable[[], dict[str, Any]],
+        retry_on: type[EzvizVacuumApiError] = UnknownActionError,
     ) -> dict[str, Any]:
         """Run ``primary``; fall back for models that name the command differently.
 
@@ -84,7 +90,7 @@ class EzvizVacuumApi:
             return alternative()
         try:
             return primary()
-        except UnknownActionError:
+        except retry_on:
             result = alternative()
             self._alternatives.add(key)
             return result
@@ -217,11 +223,19 @@ class EzvizVacuumApi:
 
         if fallback is None:
             return send((domain, action, payload))
+        # The two room-settings actions are named differently per model and a
+        # model that lacks one may refuse it with a plain failure.
+        retry_on = (
+            EzvizVacuumApiError
+            if action in ROOM_SETTING_ACTIONS
+            else UnknownActionError
+        )
         return self._with_alternative(
             serial,
             f"setting:{domain}/{action}",
             lambda: send((domain, action, payload)),
             lambda: send(fallback),
+            retry_on=retry_on,
         )
 
     def start_region_clean(
