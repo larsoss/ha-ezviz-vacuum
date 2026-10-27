@@ -30,7 +30,7 @@ BINARY_SENSORS: Final[tuple[RobotBinarySensorDescription, ...]] = (
         key="on_base_station",
         translation_key="on_base_station",
         icon="mdi:home-import-outline",
-        value_fn=lambda data: robot.task_data(data.get("task")).get("isOnBasestation"),
+        value_fn=lambda data: robot.on_base_station(data.get("task")),
     ),
     RobotBinarySensorDescription(
         key="do_not_disturb_active",

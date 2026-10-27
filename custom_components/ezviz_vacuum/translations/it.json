@@ -156,6 +156,16 @@
       "current_task": {
         "name": "Attività corrente"
       },
+      "charging_status": {
+        "name": "Stato di carica",
+        "state": {
+          "waiting_charge": "In attesa di ricarica",
+          "charging": "In carica"
+        }
+      },
+      "last_event": {
+        "name": "Ultimo evento"
+      },
       "task_duration": {
         "name": "Durata dell'attività"
       },
@@ -164,6 +174,9 @@
       },
       "last_error": {
         "name": "Ultimo errore"
+      },
+      "last_error_time": {
+        "name": "Ora dell'ultimo errore"
       },
       "last_clean_area": {
         "name": "Area dell'ultima pulizia"

@@ -156,6 +156,16 @@
       "current_task": {
         "name": "Tâche en cours"
       },
+      "charging_status": {
+        "name": "État de charge",
+        "state": {
+          "waiting_charge": "En attente de charge",
+          "charging": "En charge"
+        }
+      },
+      "last_event": {
+        "name": "Dernier événement"
+      },
       "task_duration": {
         "name": "Durée de la tâche"
       },
@@ -164,6 +174,9 @@
       },
       "last_error": {
         "name": "Dernière erreur"
+      },
+      "last_error_time": {
+        "name": "Heure de la dernière erreur"
       },
       "last_clean_area": {
         "name": "Surface du dernier nettoyage"

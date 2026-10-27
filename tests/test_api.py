@@ -188,6 +188,83 @@ class ApiTests(unittest.TestCase):
         with self.assertRaises(load("api").EzvizVacuumApiError):
             self.api.fetch_clean_log("ab1234567")
 
+    def test_room_settings_fall_back_on_a_plain_failure_and_remember(self) -> None:
+        calls = []
+
+        def put(url: str, **kwargs):
+            calls.append(url.rsplit("/", 1)[-1])
+            if url.endswith("SetRoomCustomCleanCfg"):
+                return FakeResponse({"meta": {"code": 1048579, "message": "failure"}})
+            return FakeResponse({"meta": {"code": 200}})
+
+        self.client._session.put = put
+        for _ in range(2):
+            self.api.send_setting_action(
+                "ab1234567",
+                domain="SweeperMapMgr",
+                action="SetRoomCustomCleanCfg",
+                payload={"mapID": 2, "roomID": 3},
+                fallback=(
+                    "SweeperMapMgr",
+                    "ModifyRoomCustomCleanCfgBatch",
+                    {"value": {"mapID": 2, "room": []}},
+                ),
+            )
+        self.assertEqual(
+            calls,
+            [
+                "SetRoomCustomCleanCfg",
+                "ModifyRoomCustomCleanCfgBatch",
+                "ModifyRoomCustomCleanCfgBatch",
+            ],
+        )
+
+    def test_other_settings_do_not_retry_on_a_plain_failure(self) -> None:
+        self.client._session.put = lambda url, **kw: FakeResponse(
+            {"meta": {"code": 1048579, "message": "failure"}}
+        )
+        with self.assertRaises(load("api").EzvizVacuumApiError):
+            self.api.send_setting_action(
+                "ab1234567",
+                domain="SweeperMapMgr",
+                action="SetCleanCfg",
+                payload={"mapID": 2},
+                fallback=("SweeperMapMgr", "SetFanModeOfStdClean", {"mapID": 2}),
+            )
+
+    def test_fetch_messages_asks_for_one_day_in_the_given_language(self) -> None:
+        payload = {"meta": {"code": 200}, "message": [{"title": "RobbyX"}, "junk"]}
+        self.client._session.request = lambda method, url, **kw: (
+            self.client._session.calls.append({"method": method, "url": url, **kw})
+            or FakeResponse(payload)
+        )
+        found = self.api.fetch_messages("ab1234567", "20261025", language="nl")
+        call = self.client._session.calls[0]
+        self.assertEqual(call["method"], "GET")
+        self.assertTrue(call["url"].endswith("/v3/unifiedmsg/list"))
+        self.assertEqual(
+            call["params"],
+            {
+                "serials": "AB1234567",
+                "stype": "92",
+                "limit": 50,
+                "date": "20261025",
+                "endTime": "",
+            },
+        )
+        self.assertEqual(call["headers"]["Accept-Language"], "nl")
+        self.assertEqual(found, [{"title": "RobbyX"}])
+
+    def test_fetch_messages_accepts_the_language_by_position_too(self) -> None:
+        self.client._session.request = lambda method, url, **kw: (
+            self.client._session.calls.append({"method": method, "url": url, **kw})
+            or FakeResponse({"meta": {"code": 200}, "message": []})
+        )
+        self.assertEqual(self.api.fetch_messages("ab1234567", "20261025", "nl"), [])
+        self.assertEqual(
+            self.client._session.calls[0]["headers"]["Accept-Language"], "nl"
+        )
+
     def test_unknown_map_layer_is_rejected(self) -> None:
         with self.assertRaises(ValueError):
             self.api.fetch_map_layer("ab1234567", "everything", map_id=2)

@@ -156,6 +156,16 @@
       "current_task": {
         "name": "Huidige taak"
       },
+      "charging_status": {
+        "name": "Laadstatus",
+        "state": {
+          "waiting_charge": "Wacht met opladen",
+          "charging": "Aan het opladen"
+        }
+      },
+      "last_event": {
+        "name": "Laatste gebeurtenis"
+      },
       "task_duration": {
         "name": "Taakduur"
       },
@@ -164,6 +174,9 @@
       },
       "last_error": {
         "name": "Laatste fout"
+      },
+      "last_error_time": {
+        "name": "Tijd van laatste fout"
       },
       "last_clean_area": {
         "name": "Laatst gereinigde oppervlakte"

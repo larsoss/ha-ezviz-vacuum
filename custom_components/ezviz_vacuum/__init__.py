@@ -8,7 +8,7 @@ from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
+from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse, callback
 from homeassistant.exceptions import (
     ConfigEntryAuthFailed,
     ConfigEntryNotReady,
@@ -131,6 +131,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: EzvizVacuumConfigEntry) 
     _migrate_to_serial(hass, entry, coordinator.serial)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    # The per-room entities follow the rooms of the map, which the app changes
+    # (a room gets a name, is merged or deleted). Reload when that happens.
+    rooms = coordinator.room_signature()
+
+    @callback
+    def _reload_when_rooms_change() -> None:
+        if coordinator.room_names and coordinator.room_signature() != rooms:
+            hass.config_entries.async_schedule_reload(entry.entry_id)
+
+    entry.async_on_unload(coordinator.async_add_listener(_reload_when_rooms_change))
     _register_services(hass)
     return True
 

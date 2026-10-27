@@ -1,5 +1,46 @@
 # Changelog
 
+## Unreleased
+
+- Per-room suction, water and passes work on the RE4: like its app, the
+  integration sends every room of the map in one `ModifyRoomCustomCleanCfgBatch`
+  call, instead of the one-room `SetRoomCustomCleanCfg` the robot refused with
+  code 1048579. Rooms left over in the settings but not on the map are left out.
+  A model that refuses one form of the call is tried with the other.
+- Per-room settings are created only for rooms that are on the map and have a
+  name there, under that name.
+- Per-room entities of rooms that are no longer on the map (merged or deleted in
+  the app) are removed when the integration loads. Rooms that still have the
+  app's default name ("Room 13") are often not real rooms; their entities are
+  created disabled, and are enabled again once the room gets a name in the app
+  (entities you disabled yourself stay disabled). The integration reloads by
+  itself when the rooms of the map change.
+- A "Charging status" sensor shows whether the robot is waiting to charge (the
+  RE4 waits for the off-peak hours while its task is already "charging") or
+  charging.
+- A "Last event" sensor shows the newest message of the EZVIZ app's event list
+  (faults such as "Side brush stuck" and notices such as "Cleaning completed"),
+  in Home Assistant's language, with the time, the code and the last five
+  events as attributes. It is read from the cloud's message list together with
+  the clean log.
+- "Last error" shows the app's explanation for a robot error code from the live
+  task ("The wheel is suspended, please put the device on the ground to start
+  it" instead of "Robot error 0xe0010025"): the message of the event list that
+  arrives within a few seconds of the error is used. The event list is read
+  again for up to five minutes after a new error until the message is found.
+  An error that was already active when Home Assistant started uses the newest
+  fault message of the last six hours, and a code explained once is remembered.
+  The RE4 code `0xe0010025` is known as "The wheel is suspended".
+- A "Last error time" sensor (timestamp) changes with every new error. The text
+  of "Last error" stays the same when the same error comes back, so Home
+  Assistant does not show a new entry for it.
+- A docked RE4 that waits for the off-peak hours is shown as `waiting_charge` by
+  "Current task" instead of `charging` (the original task name is in the
+  `robot_task` attribute), so it agrees with "Charging status".
+- "On base station" is on while the robot is charging or on a station task: the
+  RE4 reports `isOnBasestation` as 0 while it sits on its dock. Numeric 1/0
+  flags now also count for the docked activity.
+
 ## 1.1.1b9 (beta)
 
 Changes since 1.1.1b6 (1.1.1b7 and 1.1.1b8 were not published).

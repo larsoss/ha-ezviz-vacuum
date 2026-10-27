@@ -11,7 +11,12 @@ import logging
 from typing import Any
 import zlib
 
-from .const import CLEAN_MODES, SETTING_ACTIONS, WRITABLE_FEATURES
+from .const import (
+    CLEAN_MODES,
+    ROOM_SETTING_ACTIONS,
+    SETTING_ACTIONS,
+    WRITABLE_FEATURES,
+)
 
 
 class EzvizVacuumApiError(Exception):
@@ -73,6 +78,7 @@ class EzvizVacuumApi:
         group: str,
         primary: Callable[[], dict[str, Any]],
         alternative: Callable[[], dict[str, Any]],
+        retry_on: type[EzvizVacuumApiError] = UnknownActionError,
     ) -> dict[str, Any]:
         """Run ``primary``; fall back for models that name the command differently.
 
@@ -84,7 +90,7 @@ class EzvizVacuumApi:
             return alternative()
         try:
             return primary()
-        except UnknownActionError:
+        except retry_on:
             result = alternative()
             self._alternatives.add(key)
             return result
@@ -217,11 +223,19 @@ class EzvizVacuumApi:
 
         if fallback is None:
             return send((domain, action, payload))
+        # The two room-settings actions are named differently per model and a
+        # model that lacks one may refuse it with a plain failure.
+        retry_on = (
+            EzvizVacuumApiError
+            if action in ROOM_SETTING_ACTIONS
+            else UnknownActionError
+        )
         return self._with_alternative(
             serial,
             f"setting:{domain}/{action}",
             lambda: send((domain, action, payload)),
             lambda: send(fallback),
+            retry_on=retry_on,
         )
 
     def start_region_clean(
@@ -297,6 +311,42 @@ class EzvizVacuumApi:
             raise EzvizVacuumApiError(f"map/{layer}: {rejection_reason(result, code)}")
         value = result.get(MAP_LAYERS[layer])
         return value if isinstance(value, dict) else {}
+
+    def fetch_messages(
+        self, serial: str, day: str, language: str | None = None
+    ) -> list[dict[str, Any]]:
+        """Read the app's event list ("Events" tab) for one day (``YYYYMMDD``).
+
+        This is the message list of the EZVIZ app, with faults such as a stuck
+        brush and notices such as a finished clean; it only reads data. The
+        text comes in the language sent in ``language``.
+        """
+        response = self._cloud.request(
+            "GET",
+            "/v3/unifiedmsg/list",
+            params={
+                "serials": serial.upper(),
+                "stype": "92",
+                "limit": 50,
+                "date": day,
+                "endTime": "",
+            },
+            headers={"Accept-Language": language} if language else None,
+        )
+        response.raise_for_status()
+        result = response.json()
+        if not isinstance(result, dict):
+            raise EzvizVacuumApiError("EZVIZ returned an invalid event list")
+        meta = result.get("meta")
+        code = meta.get("code") if isinstance(meta, dict) else None
+        if code not in (None, 0, 200, "0", "200"):
+            raise EzvizVacuumApiError(
+                f"unifiedmsg/list: {rejection_reason(result, code)}"
+            )
+        messages = result.get("message")
+        if not isinstance(messages, list):
+            return []
+        return [message for message in messages if isinstance(message, dict)]
 
     def fetch_clean_log(self, serial: str) -> dict[str, Any]:
         """Read the cloud clean log: recent cleans and lifetime totals.

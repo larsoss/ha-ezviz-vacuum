@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -70,3 +73,42 @@ def reported(coordinator: EzvizVacuumCoordinator, setting: Setting) -> bool:
     """
     data = coordinator.data or {}
     return setting.available(data.get("device"), data.get("task"))
+
+
+def sync_room_entities(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    domain: str,
+    *,
+    keep: set[str],
+    enable: set[str],
+    remove: bool,
+) -> None:
+    """Bring the per-room setting entities in line with the map.
+
+    Call this before the platform adds its entities.
+
+    - Entities of rooms that are no longer on the map are removed (earlier
+      versions created entities for every room the robot listed, including
+      rooms that were merged or deleted in the app). ``remove`` is only set
+      when the room list really came from the map.
+    - Entities that were disabled by the integration because the room still had
+      the app's default name are enabled once the room has a real name.
+      Entities the user disabled stay disabled.
+    """
+    registry = er.async_get(hass)
+    registered = {
+        item.unique_id: item
+        for item in er.async_entries_for_config_entry(registry, entry.entry_id)
+        if item.domain == domain and item.unique_id
+    }
+    if remove:
+        for unique_id in robot.stale_room_entities(registered, keep):
+            registry.async_remove(registered[unique_id].entity_id)
+    for unique_id in enable:
+        item = registered.get(unique_id)
+        if (
+            item is not None
+            and item.disabled_by is er.RegistryEntryDisabler.INTEGRATION
+        ):
+            registry.async_update_entity(item.entity_id, disabled_by=None)
