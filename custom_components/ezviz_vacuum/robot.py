@@ -229,6 +229,8 @@ def _float(value: Any) -> float | None:
 
 # App message codes that report a normal event instead of a fault.
 NOTICE_CODES = frozenset({30084})
+# Messages that open the clean log are notices too (RE4: CleanLog, RS20: LogPage).
+_LOG_PAGES = ("CleanLog", "LogPage")
 
 
 def _link_entry(link: Any) -> str | None:
@@ -272,7 +274,8 @@ def events(messages: Any) -> list[dict[str, Any]]:
                     "id": message.get("msgId"),
                     # A finished clean is a notice, not the cause of an error.
                     "notice": code in NOTICE_CODES
-                    or _link_entry(message.get("detailLink")) == "CleanLog",
+                    or _link_entry(message.get("detailLink"))
+                    in ("CleanLog", "LogPage"),
                 },
             )
         )

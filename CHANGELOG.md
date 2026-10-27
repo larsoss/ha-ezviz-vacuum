@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.1b11 (beta)
+
+- Last event and Last error are in Home Assistant's language, like the app;
+  they came in English because the default request headers ask for English
+  (#8).
+
 ## 1.1.1b10 (beta)
 
 Changes since 1.1.1b9, by @larsoss (#8), found and tested on his RE4.

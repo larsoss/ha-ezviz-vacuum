@@ -19,6 +19,27 @@ from .const import (
 )
 
 
+def language_headers(language: str | None) -> dict[str, str] | None:
+    """Return the headers that make the cloud answer in ``language``.
+
+    The session's default headers ask for English (``language: en_GB``,
+    ``lang: en``); the app sends its own language in all three.
+    """
+    if not language:
+        return None
+    code = language.replace("_", "-")
+    base, _, region = code.partition("-")
+    base = base.lower()
+    region = (region or {"en": "GB", "zh": "CN"}.get(base, base)).upper()
+    if region == "HANT":
+        region = "TW"
+    return {
+        "language": f"{base}_{region}",
+        "lang": base,
+        "Accept-Language": f"{base}-{region},{base};q=0.9",
+    }
+
+
 class EzvizVacuumApiError(Exception):
     """Raised when the robot endpoint rejects a request."""
 
@@ -331,7 +352,7 @@ class EzvizVacuumApi:
                 "date": day,
                 "endTime": "",
             },
-            headers={"Accept-Language": language} if language else None,
+            headers=language_headers(language),
         )
         response.raise_for_status()
         result = response.json()

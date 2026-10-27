@@ -252,7 +252,7 @@ class ApiTests(unittest.TestCase):
                 "endTime": "",
             },
         )
-        self.assertEqual(call["headers"]["Accept-Language"], "nl")
+        self.assertEqual(call["headers"]["language"], "nl_NL")
         self.assertEqual(found, [{"title": "RobbyX"}])
 
     def test_fetch_messages_accepts_the_language_by_position_too(self) -> None:
@@ -261,9 +261,7 @@ class ApiTests(unittest.TestCase):
             or FakeResponse({"meta": {"code": 200}, "message": []})
         )
         self.assertEqual(self.api.fetch_messages("ab1234567", "20261025", "nl"), [])
-        self.assertEqual(
-            self.client._session.calls[0]["headers"]["Accept-Language"], "nl"
-        )
+        self.assertEqual(self.client._session.calls[0]["headers"]["language"], "nl_NL")
 
     def test_unknown_map_layer_is_rejected(self) -> None:
         with self.assertRaises(ValueError):
@@ -343,6 +341,21 @@ class RejectionTests(unittest.TestCase):
     def test_without_detail(self) -> None:
         reason = load("api").rejection_reason({"meta": {"message": "Bad"}}, 500)
         self.assertEqual(reason, "Bad (code 500)")
+
+
+class LanguageHeaderTests(unittest.TestCase):
+    """The event list answers in the language of these headers."""
+
+    def test_headers(self) -> None:
+        headers = load("api").language_headers
+        self.assertEqual(
+            headers("nl"),
+            {"language": "nl_NL", "lang": "nl", "Accept-Language": "nl-NL,nl;q=0.9"},
+        )
+        self.assertEqual(headers("en")["language"], "en_GB")
+        self.assertEqual(headers("pt-BR")["language"], "pt_BR")
+        self.assertEqual(headers("zh-Hant")["language"], "zh_TW")
+        self.assertIsNone(headers(None))
 
 
 if __name__ == "__main__":
