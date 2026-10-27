@@ -156,6 +156,13 @@
       "current_task": {
         "name": "Attività corrente"
       },
+      "charging_status": {
+        "name": "Stato di carica",
+        "state": {
+          "waiting_charge": "In attesa di ricarica",
+          "charging": "In carica"
+        }
+      },
       "task_duration": {
         "name": "Durata dell'attività"
       },

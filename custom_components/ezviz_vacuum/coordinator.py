@@ -76,6 +76,13 @@ class EzvizVacuumCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._last_exception: dict[str, Any] | None = None
         self._clean_log_fetched: float | None = None
 
+    def room_signature(self) -> tuple[tuple[tuple[int, str], ...], tuple[int, ...]]:
+        """Return the rooms of the map and which of them have a default name.
+
+        Per-room entities are created from this, so a change reloads the entry.
+        """
+        return tuple(sorted(self.room_names.items())), tuple(sorted(self.room_generic))
+
     def _api(self) -> EzvizCloud:
         return self.cloud
 

@@ -112,6 +112,15 @@ def _battery_cycles(data: Data) -> Any:
     return battery.get("cycleCount") if isinstance(battery, Mapping) else None
 
 
+CHARGING_STATES: Final = ("waiting_charge", "charging")
+
+
+def _charging_status(data: Data) -> str | None:
+    """The charging state, when it is one this integration knows."""
+    status = robot.charging_status(data.get("task"))
+    return status if status in CHARGING_STATES else None
+
+
 SENSORS: Final = (
     RobotSensorDescription(
         key="battery",
@@ -178,6 +187,17 @@ SENSORS: Final = (
             "previous_task": robot.task_data(data.get("task")).get("preTask")
         },
         icon="mdi:robot-vacuum-variant",
+    ),
+    RobotSensorDescription(
+        key="charging_status",
+        translation_key="charging_status",
+        value_fn=_charging_status,
+        attributes_fn=lambda data: {
+            "robot_status": robot.charging_status(data.get("task"))
+        },
+        device_class=SensorDeviceClass.ENUM,
+        options=list(CHARGING_STATES),
+        icon="mdi:battery-clock-outline",
     ),
     RobotSensorDescription(
         key="task_duration",

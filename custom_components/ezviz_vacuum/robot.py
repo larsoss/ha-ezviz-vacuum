@@ -275,8 +275,12 @@ def rooms_follow_map(
 
     Only then are per-room entities of other rooms known to be stale.
     """
-    return bool(names) and bool(found) and all(
-        str(room_id).isdigit() and int(room_id) in names for room_id, _ in found
+    return (
+        bool(names)
+        and bool(found)
+        and all(
+            str(room_id).isdigit() and int(room_id) in names for room_id, _ in found
+        )
     )
 
 
@@ -408,6 +412,23 @@ def task_paused(task: Mapping[str, Any] | None) -> bool:
             if status.startswith("pause") or status == "suspend":
                 return True
     return False
+
+
+_CAMEL_BOUNDARY = re.compile(r"(?<!^)(?=[A-Z])")
+
+
+def charging_status(task: Mapping[str, Any] | None) -> str | None:
+    """Return the charging state of the live task, e.g. ``waiting_charge``.
+
+    The task is named ``charging`` as soon as the robot is on its dock, also
+    while it waits for the off-peak hours: ``inCharging`` is then 0 and
+    ``chargingTaskInfo.status`` is ``waitingCharge``.
+    """
+    info = task_data(task).get("chargingTaskInfo")
+    status = info.get("status") if isinstance(info, Mapping) else None
+    if not isinstance(status, str) or not status.strip():
+        return None
+    return _CAMEL_BOUNDARY.sub("_", status.strip()).lower()
 
 
 def activity(

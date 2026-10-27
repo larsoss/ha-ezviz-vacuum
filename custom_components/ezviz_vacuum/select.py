@@ -14,7 +14,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from . import robot
 from .const import CLEAN_MODES
 from .coordinator import EzvizVacuumCoordinator
-from .entity import RobotSettingEntity, remove_stale_room_entities, reported
+from .entity import RobotSettingEntity, reported, sync_room_entities
 from .settings import (
     FAN_SPEEDS,
     ROOM_SETTING_MODES,
@@ -137,24 +137,32 @@ async def async_setup_entry(
         coordinator.room_names,
         coordinator.room_generic,
     )
+    serial = coordinator.data["serial"]
+    sync_room_entities(
+        hass,
+        entry,
+        "select",
+        keep={f"{serial}_{key}" for key, _, _ in rooms},
+        enable={
+            f"{serial}_{key}"
+            for key, description, _ in rooms
+            if description.entity_registry_enabled_default
+        },
+        remove=robot.rooms_follow_map(
+            robot.setting_rooms(
+                device,
+                robot.active_map_id(device, task),
+                hass.config.language,
+                coordinator.room_names,
+            ),
+            coordinator.room_names,
+        ),
+    )
     entities.extend(
         RobotSettingSelect(coordinator, key, description, {"room": name})
         for key, description, name in rooms
     )
     async_add_entities(entities)
-    if robot.rooms_follow_map(
-        robot.setting_rooms(
-            device,
-            robot.active_map_id(device, task),
-            hass.config.language,
-            coordinator.room_names,
-        ),
-        coordinator.room_names,
-    ):
-        serial = coordinator.data["serial"]
-        remove_stale_room_entities(
-            hass, entry, "select", {f"{serial}_{key}" for key, _, _ in rooms}
-        )
 
 
 class RobotSettingSelect(RobotSettingEntity, SelectEntity):

@@ -156,6 +156,13 @@
       "current_task": {
         "name": "Bieżące zadanie"
       },
+      "charging_status": {
+        "name": "Stan ładowania",
+        "state": {
+          "waiting_charge": "Czeka na ładowanie",
+          "charging": "Ładuje"
+        }
+      },
       "task_duration": {
         "name": "Czas trwania zadania"
       },

@@ -156,6 +156,13 @@
       "current_task": {
         "name": "Tarea actual"
       },
+      "charging_status": {
+        "name": "Estado de carga",
+        "state": {
+          "waiting_charge": "Esperando para cargar",
+          "charging": "Cargando"
+        }
+      },
       "task_duration": {
         "name": "Duración de la tarea"
       },
