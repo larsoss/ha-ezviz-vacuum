@@ -417,5 +417,60 @@ class EventTests(unittest.TestCase):
             self.assertEqual(robot.events(value), [])
 
 
+class ErrorExplanationTests(unittest.TestCase):
+    """A bare error code from the live task gets the app's explanation."""
+
+    EVENTS = [
+        {
+            "text": "The wheel is suspended, please put the device on the ground",
+            "time": "2026-10-27 09:16:03",
+            "code": 30109,
+        },
+        {"text": "Cleaning completed", "time": "2026-10-27 07:41:02", "code": 30084},
+    ]
+
+    @staticmethod
+    def _error(robot_time):
+        return {"code": "0xe0010025", "robot_time": robot_time}
+
+    def test_the_message_a_few_seconds_away_is_the_explanation(self) -> None:
+        found = robot.event_for_error(
+            self._error("2026-10-27T09:16:06.000"), self.EVENTS
+        )
+        self.assertEqual(found["code"], 30109)
+
+    def test_the_closest_message_wins(self) -> None:
+        events = [
+            {"text": "far", "time": "2026-10-27 09:15:00"},
+            {"text": "near", "time": "2026-10-27 09:16:10"},
+        ]
+        found = robot.event_for_error(self._error("2026-10-27T09:16:06.000"), events)
+        self.assertEqual(found["text"], "near")
+
+    def test_a_message_from_hours_ago_is_not_used(self) -> None:
+        self.assertIsNone(
+            robot.event_for_error(self._error("2026-10-27T11:00:00.000"), self.EVENTS)
+        )
+
+    def test_no_clock_or_no_events(self) -> None:
+        self.assertIsNone(robot.event_for_error(self._error(None), self.EVENTS))
+        self.assertIsNone(robot.event_for_error({"code": "x"}, self.EVENTS))
+        self.assertIsNone(robot.event_for_error(None, self.EVENTS))
+        self.assertIsNone(
+            robot.event_for_error(self._error("2026-10-27T09:16:06.000"), None)
+        )
+        self.assertIsNone(
+            robot.event_for_error(
+                self._error("2026-10-27T09:16:06.000"), [{"text": "x", "time": "?"}]
+            )
+        )
+
+    def test_offsets_on_the_robot_clock_are_ignored(self) -> None:
+        found = robot.event_for_error(
+            self._error("2026-10-27T09:16:06.000+01:00"), self.EVENTS
+        )
+        self.assertEqual(found["code"], 30109)
+
+
 if __name__ == "__main__":
     unittest.main()

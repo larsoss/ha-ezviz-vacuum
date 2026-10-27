@@ -23,6 +23,11 @@
   in Home Assistant's language, with the time, the code and the last five
   events as attributes. It is read from the cloud's message list together with
   the clean log.
+- "Last error" shows the app's explanation for a robot error code from the live
+  task ("The wheel is suspended, please put the device on the ground to start
+  it" instead of "Robot error 0xe0010025"): the message of the event list that
+  arrives within a few seconds of the error is used. The event list is read
+  again for up to ten minutes after a new error until the message is found.
 
 ## 1.1.1b9 (beta)
 

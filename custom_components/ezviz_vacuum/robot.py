@@ -263,6 +263,42 @@ def events(messages: Any) -> list[dict[str, Any]]:
     return [event for _, event in found]
 
 
+def _clock(value: Any) -> datetime | None:
+    """Parse a time the robot or the cloud gives in the robot's own time zone."""
+    text = str(value or "").strip().replace("T", " ")
+    try:
+        return datetime.fromisoformat(text).replace(tzinfo=None)
+    except ValueError:
+        return None
+
+
+def event_for_error(
+    error: Mapping[str, Any] | None,
+    found: list[dict[str, Any]] | None,
+    window: float = 180,
+) -> dict[str, Any] | None:
+    """Return the app message that belongs to a robot error.
+
+    The live task only has a code such as ``0xe0010025``; the app sends a
+    message with the explanation a few seconds later ("The wheel is
+    suspended..."). Both carry the robot's own clock, so they are matched on
+    time: the closest message within ``window`` seconds.
+    """
+    when = _clock(error.get("robot_time")) if error else None
+    if when is None:
+        return None
+    best: dict[str, Any] | None = None
+    best_gap: float | None = None
+    for event in found or []:
+        at = _clock(event.get("time"))
+        if at is None:
+            continue
+        gap = abs((at - when).total_seconds())
+        if gap <= window and (best_gap is None or gap < best_gap):
+            best, best_gap = event, gap
+    return best
+
+
 def is_generic_room_name(raw_name: Any) -> bool:
     """Return whether a room still has the app's default name ("Room 13").
 

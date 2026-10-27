@@ -21,6 +21,10 @@ CLEAN_LOG_REFRESH_INTERVAL = 1800
 # refreshes only need the last two days.
 EVENT_LOOKBACK_DAYS = 7
 EVENT_RECENT_DAYS = 2
+# After a new error, look for the app's explanation for this long (seconds),
+# reading the event list at most this often (seconds).
+EVENT_MATCH_SECONDS = 600
+EVENT_FORCE_GAP = 30
 
 SERVICE_INSPECT = "inspect"
 SERVICE_MAP_DIAGNOSTICS = "map_diagnostics"

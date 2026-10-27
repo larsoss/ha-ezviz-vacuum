@@ -32,7 +32,9 @@ from .const import (
     DEFAULT_SCAN_INTERVAL,
     DEVICE_REFRESH_INTERVAL,
     DOMAIN,
+    EVENT_FORCE_GAP,
     EVENT_LOOKBACK_DAYS,
+    EVENT_MATCH_SECONDS,
     EVENT_RECENT_DAYS,
 )
 from .mapdata import build_layers, decode_room_names
@@ -79,6 +81,8 @@ class EzvizVacuumCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # The last error seen in the live task, for robots without an error
         # history (RE4).
         self._last_exception: dict[str, Any] | None = None
+        self._exception_active = False
+        self._exception_seen = 0.0
         self._clean_log_fetched: float | None = None
 
     def room_signature(self) -> tuple[tuple[tuple[int, str], ...], tuple[int, ...]]:
@@ -184,9 +188,12 @@ class EzvizVacuumCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 ACTIVE_SCAN_INTERVAL if moving else DEFAULT_SCAN_INTERVAL
             )
 
-        await self._async_refresh_clean_log(force=task_changed)
-        await self._async_refresh_events(force=task_changed)
         self._remember_exception(task)
+        await self._async_refresh_clean_log(force=task_changed)
+        await self._async_refresh_events(
+            force=task_changed or self._error_waits_for_event()
+        )
+        self._attach_event()
 
         return {
             "serial": self.serial,
@@ -204,14 +211,49 @@ class EzvizVacuumCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         code = robot.task_exception(task) if task else None
         if code is None:
+            self._exception_active = False
             return
-        if self._last_exception and self._last_exception.get("code") == code:
+        if (
+            self._exception_active
+            and self._last_exception
+            and self._last_exception.get("code") == code
+        ):
             return
+        self._exception_active = True
+        self._exception_seen = monotonic()
         self._last_exception = {
             "code": code,
             "description": robot.error_description(code),
             "time": dt_util.now().isoformat(timespec="seconds"),
+            # The robot's own clock, to find the app's message for this error.
+            "robot_time": robot.task_data(task).get("datetime"),
         }
+
+    def _error_waits_for_event(self) -> bool:
+        """Whether a new error still has to be matched with the app's message.
+
+        The message arrives a few seconds after the error, so the event list is
+        read again (at most every 30 seconds) for up to ten minutes.
+        """
+        return bool(
+            self._exception_active
+            and self._last_exception
+            and not self._last_exception.get("event")
+            and monotonic() - self._exception_seen < EVENT_MATCH_SECONDS
+        )
+
+    def _attach_event(self) -> None:
+        """Use the app's explanation for the live task's error code."""
+        error = self._last_exception
+        if not error or error.get("event"):
+            return
+        event = robot.event_for_error(error, self._events)
+        if event:
+            self._last_exception = {
+                **error,
+                "description": event["text"],
+                "event": event["text"],
+            }
 
     async def _async_refresh_clean_log(self, *, force: bool = False) -> None:
         """Read the cloud clean log now and then, and when a task changes.
@@ -250,12 +292,12 @@ class EzvizVacuumCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if self.robot_api is None or not self.serial:
             return
         fetched = self._events_fetched
-        if (
-            not force
-            and fetched is not None
-            and monotonic() - fetched < CLEAN_LOG_REFRESH_INTERVAL
-        ):
-            return
+        if fetched is not None:
+            age = monotonic() - fetched
+            if age < EVENT_FORCE_GAP or (
+                not force and age < CLEAN_LOG_REFRESH_INTERVAL
+            ):
+                return
         self._events_fetched = monotonic()
         from homeassistant.util import dt as dt_util
 
