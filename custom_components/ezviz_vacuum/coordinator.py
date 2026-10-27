@@ -67,6 +67,7 @@ class EzvizVacuumCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._map_show_path: bool | None = None
         self._map_cache_id: int | None = None
         self.room_names: dict[int, str] = {}
+        self.room_generic: frozenset[int] = frozenset()
         self.camera_snapshot: bytes | None = None
         self.camera_snapshot_updated: datetime | None = None
         self._clean_log: dict[str, Any] | None = None
@@ -276,6 +277,11 @@ class EzvizVacuumCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             room_id: robot.room_name(raw, room_id, self.hass.config.language)
             for room_id, raw in raw_names.items()
         }
+        self.room_generic = frozenset(
+            room_id
+            for room_id, raw in raw_names.items()
+            if robot.is_generic_room_name(raw)
+        )
         # The path of a finished clean is hidden once the robot is docked.
         show_path = robot.activity(task, self._device) != robot.ACTIVITY_DOCKED
         if show_path != self._map_show_path:

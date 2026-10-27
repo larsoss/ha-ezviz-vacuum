@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -70,3 +73,24 @@ def reported(coordinator: EzvizVacuumCoordinator, setting: Setting) -> bool:
     """
     data = coordinator.data or {}
     return setting.available(data.get("device"), data.get("task"))
+
+
+def remove_stale_room_entities(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    domain: str,
+    keep: set[str],
+) -> None:
+    """Remove per-room setting entities of rooms that are no longer on the map.
+
+    Earlier versions created entities for every room the robot listed,
+    including rooms that were merged or deleted in the app.
+    """
+    registry = er.async_get(hass)
+    registered = {
+        item.unique_id: item.entity_id
+        for item in er.async_entries_for_config_entry(registry, entry.entry_id)
+        if item.domain == domain and item.unique_id
+    }
+    for unique_id in robot.stale_room_entities(registered, keep):
+        registry.async_remove(registered[unique_id])

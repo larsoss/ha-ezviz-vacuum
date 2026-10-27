@@ -17,7 +17,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import robot
 from .coordinator import EzvizVacuumCoordinator
-from .entity import RobotSettingEntity, reported
+from .entity import RobotSettingEntity, remove_stale_room_entities, reported
 from .settings import (
     FieldSetting,
     MapCleanSetting,
@@ -96,6 +96,7 @@ def room_numbers(
     task: Any,
     language: str | None = "en",
     names: Mapping[int, str] | None = None,
+    generic: frozenset[int] = frozenset(),
 ) -> list[tuple[str, RobotNumberDescription, str]]:
     """Return ``(key, description, room name)`` for per-room passes."""
     map_id = robot.active_map_id(device, task)
@@ -114,6 +115,8 @@ def room_numbers(
                 native_min_value=1,
                 native_max_value=MAX_PASSES,
                 setting=RoomCleanSetting(int(room_id), "cleanTimes", room_ids),
+                # Rooms the app named "Room N" itself are often not real rooms.
+                entity_registry_enabled_default=int(room_id) not in generic,
             ),
             name,
         )
@@ -134,16 +137,33 @@ async def async_setup_entry(
         for description in NUMBERS
         if reported(coordinator, description.setting)
     ]
+    device = coordinator.data.get("device")
+    task = coordinator.data.get("task")
+    rooms = room_numbers(
+        device,
+        task,
+        hass.config.language,
+        coordinator.room_names,
+        coordinator.room_generic,
+    )
     entities.extend(
         RobotSettingNumber(coordinator, key, description, {"room": name})
-        for key, description, name in room_numbers(
-            coordinator.data.get("device"),
-            coordinator.data.get("task"),
-            hass.config.language,
-            coordinator.room_names,
-        )
+        for key, description, name in rooms
     )
     async_add_entities(entities)
+    if robot.rooms_follow_map(
+        robot.setting_rooms(
+            device,
+            robot.active_map_id(device, task),
+            hass.config.language,
+            coordinator.room_names,
+        ),
+        coordinator.room_names,
+    ):
+        serial = coordinator.data["serial"]
+        remove_stale_room_entities(
+            hass, entry, "number", {f"{serial}_{key}" for key, _, _ in rooms}
+        )
 
 
 class RobotSettingNumber(RobotSettingEntity, NumberEntity):

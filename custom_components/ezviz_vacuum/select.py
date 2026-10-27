@@ -14,7 +14,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from . import robot
 from .const import CLEAN_MODES
 from .coordinator import EzvizVacuumCoordinator
-from .entity import RobotSettingEntity, reported
+from .entity import RobotSettingEntity, remove_stale_room_entities, reported
 from .settings import (
     FAN_SPEEDS,
     ROOM_SETTING_MODES,
@@ -85,6 +85,7 @@ def room_selects(
     task: Any,
     language: str | None = "en",
     names: Mapping[int, str] | None = None,
+    generic: frozenset[int] = frozenset(),
 ) -> list[tuple[str, RobotSelectDescription, str]]:
     """Return ``(key, description, room name)`` for every room of the active map."""
     map_id = robot.active_map_id(device, task)
@@ -107,6 +108,8 @@ def room_selects(
                 icon=icon,
                 options=list(options),
                 setting=RoomCleanSetting(int(room_id), field, room_ids),
+                # Rooms the app named "Room N" itself are often not real rooms.
+                entity_registry_enabled_default=int(room_id) not in generic,
             )
             result.append((description.key, description, name))
     return result
@@ -125,16 +128,33 @@ async def async_setup_entry(
         if reported(coordinator, description.setting)
     ]
     # Rooms are read once; reload the integration after editing the map.
+    device = coordinator.data.get("device")
+    task = coordinator.data.get("task")
+    rooms = room_selects(
+        device,
+        task,
+        hass.config.language,
+        coordinator.room_names,
+        coordinator.room_generic,
+    )
     entities.extend(
         RobotSettingSelect(coordinator, key, description, {"room": name})
-        for key, description, name in room_selects(
-            coordinator.data.get("device"),
-            coordinator.data.get("task"),
-            hass.config.language,
-            coordinator.room_names,
-        )
+        for key, description, name in rooms
     )
     async_add_entities(entities)
+    if robot.rooms_follow_map(
+        robot.setting_rooms(
+            device,
+            robot.active_map_id(device, task),
+            hass.config.language,
+            coordinator.room_names,
+        ),
+        coordinator.room_names,
+    ):
+        serial = coordinator.data["serial"]
+        remove_stale_room_entities(
+            hass, entry, "select", {f"{serial}_{key}" for key, _, _ in rooms}
+        )
 
 
 class RobotSettingSelect(RobotSettingEntity, SelectEntity):
