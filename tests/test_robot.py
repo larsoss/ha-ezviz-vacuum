@@ -296,41 +296,6 @@ class GhostRoomTests(unittest.TestCase):
         for raw in ("#@KeT#", "#@ChuF#", "Tuin", "Woonkamer", "Room 13"):
             self.assertFalse(robot.is_generic_room_name(raw), raw)
 
-    def test_only_unprovided_room_entities_are_stale(self) -> None:
-        registered = [
-            "BC1_room_0_suction",
-            "BC1_room_4_suction",
-            "BC1_room_4_water_level",
-            "BC1_room_7_cleaning_passes",
-            "BC1_room_settings",
-            "BC1_battery",
-        ]
-        keep = {"BC1_room_0_suction"}
-        self.assertEqual(
-            robot.stale_room_entities(registered, keep),
-            [
-                "BC1_room_4_suction",
-                "BC1_room_4_water_level",
-                "BC1_room_7_cleaning_passes",
-            ],
-        )
-
-    def test_nothing_is_stale_when_everything_is_provided(self) -> None:
-        registered = ["BC1_room_0_suction", "BC1_room_12_water_level"]
-        self.assertEqual(robot.stale_room_entities(registered, set(registered)), [])
-
-    def test_rooms_follow_the_map_only_when_limited_by_it(self) -> None:
-        names = {0: "Kitchen", 1: "Living room"}
-        self.assertTrue(
-            robot.rooms_follow_map([("0", "Kitchen"), ("1", "Living room")], names)
-        )
-        # Fell back to every configured room: nothing may be removed.
-        self.assertFalse(
-            robot.rooms_follow_map([("0", "Room 0"), ("4", "Room 4")], names)
-        )
-        self.assertFalse(robot.rooms_follow_map([("0", "Room 0")], {}))
-        self.assertFalse(robot.rooms_follow_map([], names))
-
 
 class ChargingStatusTests(unittest.TestCase):
     """A docked robot is on the ``charging`` task even while it waits."""

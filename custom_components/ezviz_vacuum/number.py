@@ -151,21 +151,11 @@ async def async_setup_entry(
         hass,
         entry,
         "number",
-        keep={f"{serial}_{key}" for key, _, _ in rooms},
         enable={
             f"{serial}_{key}"
             for key, description, _ in rooms
             if description.entity_registry_enabled_default
         },
-        remove=robot.rooms_follow_map(
-            robot.setting_rooms(
-                device,
-                robot.active_map_id(device, task),
-                hass.config.language,
-                coordinator.room_names,
-            ),
-            coordinator.room_names,
-        ),
     )
     entities.extend(
         RobotSettingNumber(coordinator, key, description, {"room": name})

@@ -80,21 +80,19 @@ def sync_room_entities(
     entry: ConfigEntry,
     domain: str,
     *,
-    keep: set[str],
     enable: set[str],
-    remove: bool,
 ) -> None:
-    """Bring the per-room setting entities in line with the map.
+    """Enable per-room entities whose room got a real name in the app.
 
-    Call this before the platform adds its entities.
+    Call this before the platform adds its entities. Entities that were
+    disabled by the integration because the room still had the app's default
+    name are enabled once the room has a real name; entities the user disabled
+    stay disabled.
 
-    - Entities of rooms that are no longer on the map are removed (earlier
-      versions created entities for every room the robot listed, including
-      rooms that were merged or deleted in the app). ``remove`` is only set
-      when the room list really came from the map.
-    - Entities that were disabled by the integration because the room still had
-      the app's default name are enabled once the room has a real name.
-      Entities the user disabled stay disabled.
+    Entities of rooms that are no longer on the map are not deleted: on a robot
+    with several maps they belong to the other map, and deleting an entity
+    loses what the user set on it. Home Assistant shows them as no longer
+    provided, and the user can delete them.
     """
     registry = er.async_get(hass)
     registered = {
@@ -102,9 +100,6 @@ def sync_room_entities(
         for item in er.async_entries_for_config_entry(registry, entry.entry_id)
         if item.domain == domain and item.unique_id
     }
-    if remove:
-        for unique_id in robot.stale_room_entities(registered, keep):
-            registry.async_remove(registered[unique_id].entity_id)
     for unique_id in enable:
         item = registered.get(unique_id)
         if (

@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 1.1.1b10 (beta)
+
+Changes since 1.1.1b9, by @larsoss (#8), found and tested on his RE4.
 
 - Per-room suction, water and passes work on the RE4: like its app, the
   integration sends every room of the map in one `ModifyRoomCustomCleanCfgBatch`
@@ -9,12 +11,12 @@
   A model that refuses one form of the call is tried with the other.
 - Per-room settings are created only for rooms that are on the map and have a
   name there, under that name.
-- Per-room entities of rooms that are no longer on the map (merged or deleted in
-  the app) are removed when the integration loads. Rooms that still have the
-  app's default name ("Room 13") are often not real rooms; their entities are
-  created disabled, and are enabled again once the room gets a name in the app
-  (entities you disabled yourself stay disabled). The integration reloads by
-  itself when the rooms of the map change.
+- Rooms that still have the app's default name ("Room 13") are often not
+  real rooms; their per-room entities are created disabled, and are enabled
+  once the room gets a name in the app (entities you disabled yourself stay
+  disabled). Entities of rooms that are no longer on the map are not deleted;
+  they show as no longer provided and can be deleted by hand. The integration
+  reloads by itself when the rooms of the map change.
 - A "Charging status" sensor shows whether the robot is waiting to charge (the
   RE4 waits for the off-peak hours while its task is already "charging") or
   charging.

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Mapping
 from datetime import datetime
 from functools import lru_cache
 import json
@@ -343,20 +343,6 @@ def is_generic_room_name(raw_name: Any) -> bool:
     return bool(match) and match.group(1) == _ROOM_WORD
 
 
-# The unique id of a per-room setting entity: ``<serial>_room_<id>_<setting>``.
-_ROOM_ENTITY_ID = re.compile(r"_room_\d+_(?:suction|water_level|cleaning_passes)$")
-
-
-def stale_room_entities(registered: Iterable[str], keep: Iterable[str]) -> list[str]:
-    """Return the per-room setting unique ids that are no longer provided."""
-    wanted = set(keep)
-    return [
-        unique_id
-        for unique_id in registered
-        if _ROOM_ENTITY_ID.search(unique_id) and unique_id not in wanted
-    ]
-
-
 def setting_rooms(
     device: Mapping[str, Any] | None,
     map_id: int | None,
@@ -379,22 +365,6 @@ def setting_rooms(
         if str(room_id).isdigit() and int(room_id) in names
     ]
     return named or found
-
-
-def rooms_follow_map(
-    found: list[tuple[str, str]], names: Mapping[int, str] | None
-) -> bool:
-    """Return whether ``found`` was limited to the rooms of the map.
-
-    Only then are per-room entities of other rooms known to be stale.
-    """
-    return (
-        bool(names)
-        and bool(found)
-        and all(
-            str(room_id).isdigit() and int(room_id) in names for room_id, _ in found
-        )
-    )
 
 
 def clean_mode(device: Mapping[str, Any] | None) -> str | None:
