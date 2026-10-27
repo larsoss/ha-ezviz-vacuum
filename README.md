@@ -215,6 +215,15 @@ passes when **Room settings** is set to per-room.
 Rooms and schedules are read when the integration starts. Reload it after
 editing the map or adding a schedule in the app.
 
+### Rooms as separate devices
+
+By default each room's suction, water level and passes are listed on the
+robot's own page. To give every room a device of its own (linked to the robot,
+and easy to put in a Home Assistant area), open **Settings → Devices &
+services → EZVIZ Robot Vacuum → Configure** and turn on **Room devices**.
+Entity IDs stay the same, so automations and dashboards keep working; turning
+the option off moves the settings back to the robot.
+
 ## The map
 
 The **Map** image entity shows the active map as an SVG, so it stays sharp at
