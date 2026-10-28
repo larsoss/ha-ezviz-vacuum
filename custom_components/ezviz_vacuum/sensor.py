@@ -16,6 +16,7 @@ from homeassistant.components.sensor import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfArea, UnitOfTime
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.util import dt as dt_util
 
 from . import robot
 from .coordinator import EzvizVacuumCoordinator
@@ -52,6 +53,47 @@ def _permanent(field: str) -> Callable[[Data], Any]:
     return read
 
 
+def _total(
+    robot_value: Callable[[Data], Any], stat_key: str, scale: float = 1
+) -> Callable[[Data], Any]:
+    """Use the robot's own lifetime counter, else the cloud clean log total."""
+
+    def read(data: Data) -> Any:
+        value = robot_value(data)
+        if value is not None:
+            return value
+        total = robot.clean_statistic(data.get("clean_log")).get(stat_key)
+        if isinstance(total, bool) or not isinstance(total, (int, float)):
+            return None
+        return round(total * scale, 2)
+
+    return read
+
+
+def _robot_scalar(key: str) -> Callable[[Data], Any]:
+    """Read a number anywhere in the robot report."""
+
+    def read(data: Data) -> Any:
+        try:
+            value = float(_find_scalar(data.get("device"), key))
+        except (TypeError, ValueError):
+            return None
+        return int(value) if value.is_integer() else value
+
+    return read
+
+
+def _last_error(data: Data) -> dict[str, Any] | None:
+    """The robot's error history, else the last error of its live task."""
+    return robot.last_error(data.get("device")) or data.get("last_exception")
+
+
+def _last_clean(data: Data) -> dict[str, Any] | None:
+    return robot.last_clean(data.get("device")) or robot.last_clean_from_log(
+        data.get("clean_log")
+    )
+
+
 def _task(field: str) -> Callable[[Data], Any]:
     """Read a field of the live task."""
     return lambda data: robot.task_data(data.get("task")).get(field)
@@ -71,6 +113,50 @@ def _battery_cycles(data: Data) -> Any:
     return battery.get("cycleCount") if isinstance(battery, Mapping) else None
 
 
+CHARGING_STATES: Final = ("waiting_charge", "charging")
+
+
+def _charging_status(data: Data) -> str | None:
+    """The charging state, when it is one this integration knows."""
+    status = robot.charging_status(data.get("task"))
+    return status if status in CHARGING_STATES else None
+
+
+def _last_event(data: Data) -> dict[str, Any] | None:
+    events = data.get("events")
+    return events[0] if isinstance(events, list) and events else None
+
+
+def _last_event_attributes(data: Data) -> dict[str, Any] | None:
+    event = _last_event(data)
+    if event is None:
+        return None
+    events = data.get("events") or []
+    return {
+        "time": event.get("time"),
+        "code": event.get("code"),
+        "type": event.get("type"),
+        "id": event.get("id"),
+        "recent": [
+            {"time": item.get("time"), "text": item.get("text")} for item in events[:5]
+        ],
+    }
+
+
+def _last_error_time(data: Data) -> Any:
+    """When the last error happened, as a timestamp.
+
+    The "Last error" text stays the same when the same error comes back, so
+    this is what changes with every new error.
+    """
+    stamp = dt_util.parse_datetime(str((_last_error(data) or {}).get("time") or ""))
+    if stamp is None:
+        return None
+    return (
+        stamp if stamp.tzinfo else stamp.replace(tzinfo=dt_util.get_default_time_zone())
+    )
+
+
 SENSORS: Final = (
     RobotSensorDescription(
         key="battery",
@@ -83,7 +169,7 @@ SENSORS: Final = (
     RobotSensorDescription(
         key="total_clean_area",
         translation_key="total_clean_area",
-        source_key="totalCleanArea",
+        value_fn=_total(_robot_scalar("totalCleanArea"), "totalArea"),
         native_unit_of_measurement=UnitOfArea.SQUARE_METERS,
         state_class=SensorStateClass.TOTAL_INCREASING,
         icon="mdi:texture-box",
@@ -91,7 +177,7 @@ SENSORS: Final = (
     RobotSensorDescription(
         key="total_clean_time",
         translation_key="total_clean_time",
-        value_fn=_permanent("totalCleanTimeMin"),
+        value_fn=_total(_permanent("totalCleanTimeMin"), "totalHour", 60),
         device_class=SensorDeviceClass.DURATION,
         native_unit_of_measurement=UnitOfTime.MINUTES,
         suggested_unit_of_measurement=UnitOfTime.HOURS,
@@ -101,7 +187,7 @@ SENSORS: Final = (
     RobotSensorDescription(
         key="total_clean_count",
         translation_key="total_clean_count",
-        value_fn=_permanent("totalCleanCount"),
+        value_fn=_total(_permanent("totalCleanCount"), "totalCount"),
         state_class=SensorStateClass.TOTAL_INCREASING,
         icon="mdi:counter",
     ),
@@ -132,11 +218,30 @@ SENSORS: Final = (
     RobotSensorDescription(
         key="current_task",
         translation_key="current_task",
-        value_fn=lambda data: robot.current_task(data.get("task")) or None,
+        value_fn=lambda data: robot.display_task(data.get("task")) or None,
         attributes_fn=lambda data: {
-            "previous_task": robot.task_data(data.get("task")).get("preTask")
+            "robot_task": robot.current_task(data.get("task")) or None,
+            "previous_task": robot.task_data(data.get("task")).get("preTask"),
         },
         icon="mdi:robot-vacuum-variant",
+    ),
+    RobotSensorDescription(
+        key="charging_status",
+        translation_key="charging_status",
+        value_fn=_charging_status,
+        attributes_fn=lambda data: {
+            "robot_status": robot.charging_status(data.get("task"))
+        },
+        device_class=SensorDeviceClass.ENUM,
+        options=list(CHARGING_STATES),
+        icon="mdi:battery-clock-outline",
+    ),
+    RobotSensorDescription(
+        key="last_event",
+        translation_key="last_event",
+        value_fn=lambda data: (_last_event(data) or {}).get("text", "")[:255] or None,
+        attributes_fn=_last_event_attributes,
+        icon="mdi:message-alert-outline",
     ),
     RobotSensorDescription(
         key="task_duration",
@@ -158,17 +263,22 @@ SENSORS: Final = (
     RobotSensorDescription(
         key="last_error",
         translation_key="last_error",
-        value_fn=lambda data: (robot.last_error(data.get("device")) or {}).get(
-            "description"
-        ),
-        attributes_fn=lambda data: robot.last_error(data.get("device")),
+        value_fn=lambda data: (_last_error(data) or {}).get("description"),
+        attributes_fn=_last_error,
         icon="mdi:alert-circle-outline",
+    ),
+    RobotSensorDescription(
+        key="last_error_time",
+        translation_key="last_error_time",
+        value_fn=_last_error_time,
+        device_class=SensorDeviceClass.TIMESTAMP,
+        icon="mdi:clock-alert-outline",
     ),
     RobotSensorDescription(
         key="last_clean_area",
         translation_key="last_clean_area",
-        value_fn=lambda data: (robot.last_clean(data.get("device")) or {}).get("area"),
-        attributes_fn=lambda data: robot.last_clean(data.get("device")),
+        value_fn=lambda data: (_last_clean(data) or {}).get("area"),
+        attributes_fn=_last_clean,
         native_unit_of_measurement=UnitOfArea.SQUARE_METERS,
         icon="mdi:history",
     ),

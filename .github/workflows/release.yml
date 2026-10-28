@@ -15,7 +15,7 @@ jobs:
       - uses: actions/checkout@v7
       - name: Tag matches the manifest version
         run: |
-          tag="${GITHUB_REF_NAME#v}"
+          tag="${GITHUB_REF_NAME#[vV]}"
           version="$(jq -r .version custom_components/ezviz_vacuum/manifest.json)"
           if [ "$tag" != "$version" ]; then
             echo "::error::Release tag $GITHUB_REF_NAME does not match manifest version $version"

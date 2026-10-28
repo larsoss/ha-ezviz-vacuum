@@ -93,6 +93,50 @@ class FieldSetting(Setting):
         return self.domain, self.identifier, payload
 
 
+@dataclass(frozen=True)
+class FlagFieldSetting(FieldSetting):
+    """A field the robot reports as 0/1 but the cloud accepts only as true/false."""
+
+    def read(self, device: Any, task: Any = None) -> Any:
+        value = super().read(device, task)
+        if value is None or isinstance(value, bool):
+            return value
+        if value in (0, 1):
+            return bool(value)
+        return None
+
+
+@dataclass(frozen=True)
+class FirstAvailableSetting(Setting):
+    """One option that different models store in different features.
+
+    Reads and writes use the first variant the robot reports.
+    """
+
+    options: tuple[Setting, ...]
+
+    def _pick(self, device: Any, task: Any = None) -> Setting:
+        for option in self.options:
+            if option.available(device, task):
+                return option
+        return self.options[0]
+
+    def read(self, device: Any, task: Any = None) -> Any:
+        return self._pick(device, task).read(device, task)
+
+    def available(self, device: Any, task: Any = None) -> bool:
+        return any(option.available(device, task) for option in self.options)
+
+    def write(self, device: Any, task: Any, value: Any) -> Write:
+        return self._pick(device, task).write(device, task, value)
+
+    def action(self, device: Any, task: Any, value: Any) -> Write | None:
+        return self._pick(device, task).action(device, task, value)
+
+    def fallback_action(self, device: Any, task: Any, value: Any) -> Write | None:
+        return self._pick(device, task).fallback_action(device, task, value)
+
+
 def _global_clean_cfg(device: Any, map_id: Any) -> Mapping[str, Any] | None:
     """Return the RE7 Edge's ``SweeperMapMgr/GlobalCleanCfg`` for a map."""
     value = feature(device, "SweeperMapMgr", "GlobalCleanCfg")
@@ -184,10 +228,16 @@ class MapCleanSetting(Setting):
 
 @dataclass(frozen=True)
 class RoomCleanSetting(Setting):
-    """A field of one room in ``SweeperMapMgr/RoomCustomCleanCfg``."""
+    """A field of one room in ``SweeperMapMgr/RoomCustomCleanCfg``.
+
+    ``room_ids`` are the rooms of the map. The RE4 app changes the settings of
+    all of them in one call; rooms that were removed from the map but linger
+    in the robot's settings are left out, like the app does.
+    """
 
     room_id: int
     field: str
+    room_ids: tuple[int, ...] = ()
 
     def _entries(self, device: Any) -> list[Any]:
         value = feature(device, "SweeperMapMgr", "RoomCustomCleanCfg")
@@ -200,20 +250,65 @@ class RoomCleanSetting(Setting):
                 return room.get(self.field)
         return None
 
-    def action(self, device: Any, task: Any, value: Any) -> Write | None:
+    def _single(self, device: Any, task: Any, value: Any) -> Write:
+        """One room at a time (RS20)."""
         map_id = robot.active_map_id(device, task)
         for room in robot.room_clean_configs(device, map_id):
             if room.get("roomID") == self.room_id:
-                payload = {
-                    "mapID": map_id,
-                    "roomID": self.room_id,
-                    "fanMode": room.get("fanMode"),
-                    "waterQuantity": room.get("waterQuantity"),
-                    "cleanTimes": room.get("cleanTimes"),
-                }
+                payload = {"mapID": map_id, "roomID": self.room_id}
+                # Like the app: send the room's settings, leaving out the
+                # ones this robot does not have.
+                for field in ("fanMode", "waterQuantity", "cleanTimes"):
+                    if room.get(field) is not None:
+                        payload[field] = room[field]
                 payload[self.field] = value
                 return "SweeperMapMgr", "SetRoomCustomCleanCfg", payload
         raise ValueError(f"Room {self.room_id} has no cleaning settings")
+
+    def _batch(self, device: Any, task: Any, value: Any) -> Write:
+        """Every room of the map in one call (RE4, as the app sends it)."""
+        map_id = robot.active_map_id(device, task)
+        configs = robot.room_clean_configs(device, map_id)
+        if not any(room.get("roomID") == self.room_id for room in configs):
+            raise ValueError(f"Room {self.room_id} has no cleaning settings")
+        rooms = []
+        for room in configs:
+            room_id = room.get("roomID")
+            if self.room_ids and room_id not in self.room_ids:
+                continue
+            entry: dict[str, Any] = {
+                "regionType": room.get("regionType") or "room",
+                "roomID": room_id,
+                "customRegionID": room.get("customRegionID") or 0,
+            }
+            for field in ("fanMode", "waterQuantity", "cleanTimes"):
+                if room.get(field) is not None:
+                    entry[field] = room[field]
+            if room_id == self.room_id:
+                entry[self.field] = value
+            rooms.append(entry)
+        payload = {"value": {"mapID": map_id, "room": rooms}}
+        return "SweeperMapMgr", "ModifyRoomCustomCleanCfgBatch", payload
+
+    @staticmethod
+    def _sends_all_rooms(device: Any) -> bool:
+        """Whether this model changes room settings for the whole map at once.
+
+        Models without a region list (the RE4) do; the RS20 sends one room.
+        """
+        return not isinstance(
+            feature(device, "SweeperMapMgr", "RegionBasicInfo"), Mapping
+        )
+
+    def action(self, device: Any, task: Any, value: Any) -> Write | None:
+        if self._sends_all_rooms(device):
+            return self._batch(device, task, value)
+        return self._single(device, task, value)
+
+    def fallback_action(self, device: Any, task: Any, value: Any) -> Write | None:
+        if self._sends_all_rooms(device):
+            return self._single(device, task, value)
+        return self._batch(device, task, value)
 
     def write(self, device: Any, task: Any, value: Any) -> Write:
         map_id = robot.active_map_id(device, task)
@@ -262,6 +357,13 @@ class RestPlanSetting(Setting):
             ]
         plan[0][self.field] = value
         return "SweeperMgr", "RestPlan", {"plan": plan}
+
+
+def do_not_disturb(field: str) -> FirstAvailableSetting:
+    """Do-not-disturb field: ``RestPlan`` (RS20 Max) or ``RestMode`` (RE4)."""
+    return FirstAvailableSetting(
+        (RestPlanSetting(field), FieldSetting("SweeperMgr", "RestMode", field))
+    )
 
 
 @dataclass(frozen=True)

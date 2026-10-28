@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import partial
 from time import monotonic
 from typing import Any
@@ -27,12 +27,18 @@ from .cloud import EzvizCloud
 from .cloud_camera import capture_cloud_snapshot, trace_cloud_stream
 from .const import (
     ACTIVE_SCAN_INTERVAL,
+    CLEAN_LOG_REFRESH_INTERVAL,
     CONF_SERIAL,
     DEFAULT_SCAN_INTERVAL,
     DEVICE_REFRESH_INTERVAL,
     DOMAIN,
+    EVENT_EARLIER_SECONDS,
+    EVENT_FORCE_GAP,
+    EVENT_LOOKBACK_DAYS,
+    EVENT_MATCH_SECONDS,
+    EVENT_RECENT_DAYS,
 )
-from .mapdata import build_layers
+from .mapdata import build_layers, decode_room_names
 from .maprender import render_svg
 from .settings import Setting, apply_write
 
@@ -65,8 +71,31 @@ class EzvizVacuumCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._map_cache: dict[str, tuple[int | None, dict[str, Any]]] = {}
         self._map_show_path: bool | None = None
         self._map_cache_id: int | None = None
+        self.room_names: dict[int, str] = {}
+        self.room_generic: frozenset[int] = frozenset()
         self.camera_snapshot: bytes | None = None
         self.camera_snapshot_updated: datetime | None = None
+        self._clean_log: dict[str, Any] | None = None
+        # The app's event list ("Events" tab), newest first; None until read.
+        self._events: list[dict[str, Any]] | None = None
+        self._events_fetched: float | None = None
+        # The last error seen in the live task, for robots without an error
+        # history (RE4).
+        self._last_exception: dict[str, Any] | None = None
+        self._exception_active = False
+        self._exception_seen = 0.0
+        self._exception_polls = 0
+        self._exception_at_start = False
+        # What the app said for an error code before (code -> text).
+        self._explanations: dict[str, str] = {}
+        self._clean_log_fetched: float | None = None
+
+    def room_signature(self) -> tuple[tuple[tuple[int, str], ...], tuple[int, ...]]:
+        """Return the rooms of the map and which of them have a default name.
+
+        Per-room entities are created from this, so a change reloads the entry.
+        """
+        return tuple(sorted(self.room_names.items())), tuple(sorted(self.room_generic))
 
     def _api(self) -> EzvizCloud:
         return self.cloud
@@ -143,6 +172,9 @@ class EzvizVacuumCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             task_error = str(err)
 
         task_name = robot.current_task(task) if task else None
+        task_changed = bool(
+            task_name and self._device_task and task_name != self._device_task
+        )
         if self._device_is_stale(task_name):
             self.serial, self._device = await self._async_fetch_device(cloud)
             self._device_fetched = monotonic()
@@ -161,12 +193,166 @@ class EzvizVacuumCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 ACTIVE_SCAN_INTERVAL if moving else DEFAULT_SCAN_INTERVAL
             )
 
+        self._remember_exception(task)
+        await self._async_refresh_clean_log(force=task_changed)
+        await self._async_refresh_events(
+            force=task_changed or self._error_waits_for_event()
+        )
+        self._attach_event()
+
         return {
             "serial": self.serial,
             "device": self._device,
             "task": task,
             "task_error": task_error,
+            "clean_log": self._clean_log,
+            "events": self._events,
+            "last_exception": self._last_exception,
         }
+
+    def _remember_exception(self, task: Mapping[str, Any]) -> None:
+        """Keep the most recent error the robot reported in its live task."""
+        from homeassistant.util import dt as dt_util
+
+        first_poll = self._exception_polls == 0
+        self._exception_polls += 1
+        code = robot.task_exception(task) if task else None
+        if code is None:
+            self._exception_active = False
+            return
+        if (
+            self._exception_active
+            and self._last_exception
+            and self._last_exception.get("code") == code
+        ):
+            return
+        self._exception_active = True
+        self._exception_seen = monotonic()
+        # An error that is already there at the first poll has no known start.
+        self._exception_at_start = first_poll
+        error: dict[str, Any] = {
+            "code": code,
+            "description": robot.error_description(code),
+            "time": dt_util.now().isoformat(timespec="seconds"),
+            # The robot's own clock, to find the app's message for this error.
+            "robot_time": robot.task_data(task).get("datetime"),
+        }
+        known = self._explanations.get(code)
+        if known:
+            error["description"] = error["event"] = known
+        self._last_exception = error
+
+    def _error_waits_for_event(self) -> bool:
+        """Whether a new error still has to be matched with the app's message.
+
+        The message arrives a few seconds after the error, so the event list is
+        read again (at most every 10 seconds) for up to five minutes. A message
+        that arrives later is still matched at the next regular read.
+        """
+        return bool(
+            self._exception_active
+            and self._last_exception
+            and not self._last_exception.get("event")
+            and monotonic() - self._exception_seen < EVENT_MATCH_SECONDS
+        )
+
+    def _attach_event(self) -> None:
+        """Use the app's explanation for the live task's error code."""
+        error = self._last_exception
+        if not error or error.get("event"):
+            return
+        event = robot.event_for_error(
+            error,
+            self._events,
+            earlier=EVENT_EARLIER_SECONDS if self._exception_at_start else None,
+        )
+        self.logger.debug(
+            "Error %s at robot time %s: %d events, matched: %s",
+            error.get("code"),
+            error.get("robot_time"),
+            len(self._events or []),
+            event["text"] if event else None,
+        )
+        if event:
+            self._explanations[str(error["code"])] = event["text"]
+            self._last_exception = {
+                **error,
+                "description": event["text"],
+                "event": event["text"],
+            }
+
+    async def _async_refresh_clean_log(self, *, force: bool = False) -> None:
+        """Read the cloud clean log now and then, and when a task changes.
+
+        It holds the lifetime totals for robots that do not report them
+        themselves (RE4). Failures keep the last log.
+        """
+        if self.robot_api is None:
+            return
+        fetched = self._clean_log_fetched
+        if (
+            not force
+            and fetched is not None
+            and monotonic() - fetched < CLEAN_LOG_REFRESH_INTERVAL
+        ):
+            return
+        self._clean_log_fetched = monotonic()
+        try:
+            self._clean_log = await self.hass.async_add_executor_job(
+                self.robot_api.fetch_clean_log, self.serial
+            )
+        except EzvizAuthTokenExpired as err:
+            raise ConfigEntryAuthFailed(
+                "The EZVIZ login has expired; please sign in again"
+            ) from err
+        except Exception as err:  # noqa: BLE001 - totals are optional
+            self.logger.debug("Could not read the clean log: %s", err)
+
+    async def _async_refresh_events(self, *, force: bool = False) -> None:
+        """Read the app's event list now and then, and when a task changes.
+
+        The first read looks back a week for the newest event; later reads only
+        the last two days, and keep the previous events when nothing new is
+        found. Failures keep the last events.
+        """
+        if self.robot_api is None or not self.serial:
+            return
+        fetched = self._events_fetched
+        if fetched is not None:
+            age = monotonic() - fetched
+            if age < EVENT_FORCE_GAP or (
+                not force and age < CLEAN_LOG_REFRESH_INTERVAL
+            ):
+                return
+        self._events_fetched = monotonic()
+        from homeassistant.util import dt as dt_util
+
+        today = dt_util.now().date()
+        days = EVENT_LOOKBACK_DAYS if self._events is None else EVENT_RECENT_DAYS
+        found: list[dict[str, Any]] = []
+        try:
+            for back in range(days):
+                day = (today - timedelta(days=back)).strftime("%Y%m%d")
+                messages = await self.hass.async_add_executor_job(
+                    partial(
+                        self.robot_api.fetch_messages,
+                        self.serial,
+                        day,
+                        language=self.hass.config.language,
+                    )
+                )
+                found = robot.events(messages)
+                if found:
+                    break
+        except EzvizAuthTokenExpired as err:
+            raise ConfigEntryAuthFailed(
+                "The EZVIZ login has expired; please sign in again"
+            ) from err
+        except Exception as err:  # noqa: BLE001 - events are optional
+            self.logger.debug("Could not read the event list: %s", err)
+            return
+        if found or self._events is None:
+            self._events = found
 
     async def _async_refresh_map(self, task: Mapping[str, Any]) -> None:
         """Fetch map layers whose version changed and redraw the map.
@@ -209,6 +395,21 @@ class EzvizVacuumCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.logger.debug("Could not read the robot map: %s", err)
         else:
             self.map_error = None
+        # Room names live on the region layer (dropped from the geometry);
+        # translate the preset codes so segments and labels read sensibly.
+        region_layer = self._map_cache.get("region", (None, None))[1]
+        raw_names = (
+            decode_room_names(region_layer) if isinstance(region_layer, Mapping) else {}
+        )
+        self.room_names = {
+            room_id: robot.room_name(raw, room_id, self.hass.config.language)
+            for room_id, raw in raw_names.items()
+        }
+        self.room_generic = frozenset(
+            room_id
+            for room_id, raw in raw_names.items()
+            if robot.is_generic_room_name(raw)
+        )
         # The path of a finished clean is hidden once the robot is docked.
         show_path = robot.activity(task, self._device) != robot.ACTIVITY_DOCKED
         if show_path != self._map_show_path:
@@ -224,7 +425,10 @@ class EzvizVacuumCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
         )
         names = {
-            int(room_id): name for room_id, name in robot.rooms(self._device, map_id)
+            int(room_id): self.room_names.get(int(room_id)) or name
+            for room_id, name in robot.rooms(
+                self._device, map_id, self.hass.config.language
+            )
         }
         image = await self.hass.async_add_executor_job(
             partial(render_svg, layers, names, show_path=show_path)
@@ -310,15 +514,31 @@ class EzvizVacuumCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Clean the selected rooms with the robot's own settings."""
         if self.robot_api is None:
             raise HomeAssistantError("The robot client is not ready yet")
+        # Refresh so map_id/task are current before we send the clean.
+        await self.async_refresh_device()
         device = self.data.get("device", {})
         map_id = robot.active_map_id(device, self.data.get("task"))
         known = {room_id for room_id, _ in robot.rooms(device, map_id)}
-        if map_id is None or not known:
-            raise HomeAssistantError("The robot has not reported its rooms yet")
+        self.logger.debug(
+            "clean_segments: map_id=%s known=%s room_map_ids=%s requested=%s",
+            map_id,
+            sorted(known),
+            robot.room_map_ids(device),
+            list(segment_ids),
+        )
+        if map_id is None:
+            raise HomeAssistantError("The robot has not reported its map yet")
         requested = [str(item) for item in segment_ids]
-        missing = sorted(set(requested) - known)
-        if missing:
-            raise ServiceValidationError(f"Unknown robot rooms: {', '.join(missing)}")
+        # The device report doesn't reliably surface the room list on the RE4
+        # (the fetched map layer and HA's own area_mapping do), so only reject
+        # unknown rooms when the robot actually reported some — otherwise trust
+        # the already-mapped segments the caller passed.
+        if known:
+            missing = sorted(set(requested) - known)
+            if missing:
+                raise ServiceValidationError(
+                    f"Unknown robot rooms: {', '.join(missing)}"
+                )
         await self._async_call(
             self.robot_api.start_region_clean,
             self.serial,

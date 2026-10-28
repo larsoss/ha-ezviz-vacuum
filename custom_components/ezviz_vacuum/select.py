@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, replace
 from typing import Any, Final
 
 from homeassistant.components.select import SelectEntity, SelectEntityDescription
@@ -13,7 +14,14 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from . import robot
 from .const import CLEAN_MODES
 from .coordinator import EzvizVacuumCoordinator
-from .entity import RobotSettingEntity
+from .entity import (
+    RobotSettingEntity,
+    reported,
+    room_device_info,
+    room_devices,
+    room_id_of,
+    sync_room_entities,
+)
 from .settings import (
     FAN_SPEEDS,
     ROOM_SETTING_MODES,
@@ -80,7 +88,11 @@ SELECTS: Final[tuple[RobotSelectDescription, ...]] = (
 
 
 def room_selects(
-    device: Any, task: Any
+    device: Any,
+    task: Any,
+    language: str | None = "en",
+    names: Mapping[int, str] | None = None,
+    generic: frozenset[int] = frozenset(),
 ) -> list[tuple[str, RobotSelectDescription, str]]:
     """Return ``(key, description, room name)`` for every room of the active map."""
     map_id = robot.active_map_id(device, task)
@@ -88,7 +100,9 @@ def room_selects(
         str(room.get("roomID")) for room in robot.room_clean_configs(device, map_id)
     }
     result = []
-    for room_id, name in robot.rooms(device, map_id):
+    on_map = robot.setting_rooms(device, map_id, language, names)
+    room_ids = tuple(int(room_id) for room_id, _ in on_map if room_id in configured)
+    for room_id, name in on_map:
         if room_id not in configured:
             continue
         for field, suffix, options, icon in (
@@ -100,7 +114,9 @@ def room_selects(
                 translation_key=f"room_{suffix}",
                 icon=icon,
                 options=list(options),
-                setting=RoomCleanSetting(int(room_id), field),
+                setting=RoomCleanSetting(int(room_id), field, room_ids),
+                # Rooms the app named "Room N" itself are often not real rooms.
+                entity_registry_enabled_default=int(room_id) not in generic,
             )
             result.append((description.key, description, name))
     return result
@@ -116,14 +132,51 @@ async def async_setup_entry(
     entities = [
         RobotSettingSelect(coordinator, description.key, description)
         for description in SELECTS
+        if reported(coordinator, description.setting)
     ]
     # Rooms are read once; reload the integration after editing the map.
-    entities.extend(
-        RobotSettingSelect(coordinator, key, description, {"room": name})
-        for key, description, name in room_selects(
-            coordinator.data.get("device"), coordinator.data.get("task")
-        )
+    device = coordinator.data.get("device")
+    task = coordinator.data.get("task")
+    rooms = room_selects(
+        device,
+        task,
+        hass.config.language,
+        coordinator.room_names,
+        coordinator.room_generic,
     )
+    serial = coordinator.data["serial"]
+    sync_room_entities(
+        hass,
+        entry,
+        "select",
+        enable={
+            f"{serial}_{key}"
+            for key, description, _ in rooms
+            if description.entity_registry_enabled_default
+        },
+    )
+    as_devices = room_devices(entry)
+    for key, description, name in rooms:
+        if not as_devices:
+            entities.append(
+                RobotSettingSelect(coordinator, key, description, {"room": name})
+            )
+            continue
+        # On the room's own device the room name is already in the device name.
+        entity = RobotSettingSelect(
+            coordinator,
+            key,
+            replace(
+                description,
+                translation_key=description.translation_key.replace(
+                    "room_", "room_device_", 1
+                ),
+            ),
+        )
+        entity._attr_device_info = room_device_info(
+            hass, entry, coordinator, room_id_of(key), name
+        )
+        entities.append(entity)
     async_add_entities(entities)
 
 

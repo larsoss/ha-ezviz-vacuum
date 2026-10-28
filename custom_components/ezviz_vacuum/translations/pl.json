@@ -156,6 +156,16 @@
       "current_task": {
         "name": "Bieżące zadanie"
       },
+      "charging_status": {
+        "name": "Stan ładowania",
+        "state": {
+          "waiting_charge": "Czeka na ładowanie",
+          "charging": "Ładuje"
+        }
+      },
+      "last_event": {
+        "name": "Ostatnie zdarzenie"
+      },
       "task_duration": {
         "name": "Czas trwania zadania"
       },
@@ -164,6 +174,9 @@
       },
       "last_error": {
         "name": "Ostatni błąd"
+      },
+      "last_error_time": {
+        "name": "Czas ostatniego błędu"
       },
       "last_clean_area": {
         "name": "Powierzchnia ostatniego sprzątania"
@@ -270,6 +283,23 @@
           "time": "Po upływie interwału",
           "region": "Po każdym pomieszczeniu"
         }
+      },
+      "room_device_suction": {
+        "name": "Moc ssania",
+        "state": {
+          "quiet": "Cichy",
+          "normal": "Normalny",
+          "strong": "Mocny",
+          "super": "Maks."
+        }
+      },
+      "room_device_water_level": {
+        "name": "Poziom wody",
+        "state": {
+          "low": "Niski",
+          "middle": "Średni",
+          "high": "Wysoki"
+        }
       }
     },
     "number": {
@@ -290,6 +320,9 @@
       },
       "voice_volume": {
         "name": "Głośność komunikatów"
+      },
+      "room_device_cleaning_passes": {
+        "name": "Liczba przejazdów"
       }
     },
     "time": {
@@ -428,6 +461,19 @@
         "headers": {
           "name": "Nagłówki",
           "description": "Opcjonalne dodatkowe nagłówki."
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Opcje",
+        "data": {
+          "room_devices": "Pomieszczenia jako urządzenia"
+        },
+        "data_description": {
+          "room_devices": "Pokazuj ustawienia każdego pomieszczenia (moc ssania, poziom wody, przejścia) jako osobne urządzenie, powiązane z robotem, zamiast na stronie robota."
         }
       }
     }

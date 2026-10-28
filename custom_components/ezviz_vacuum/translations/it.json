@@ -156,6 +156,16 @@
       "current_task": {
         "name": "Attività corrente"
       },
+      "charging_status": {
+        "name": "Stato di carica",
+        "state": {
+          "waiting_charge": "In attesa di ricarica",
+          "charging": "In carica"
+        }
+      },
+      "last_event": {
+        "name": "Ultimo evento"
+      },
       "task_duration": {
         "name": "Durata dell'attività"
       },
@@ -164,6 +174,9 @@
       },
       "last_error": {
         "name": "Ultimo errore"
+      },
+      "last_error_time": {
+        "name": "Ora dell'ultimo errore"
       },
       "last_clean_area": {
         "name": "Area dell'ultima pulizia"
@@ -270,6 +283,23 @@
           "time": "Dopo l'intervallo",
           "region": "Dopo ogni stanza"
         }
+      },
+      "room_device_suction": {
+        "name": "Aspirazione",
+        "state": {
+          "quiet": "Silenzioso",
+          "normal": "Normale",
+          "strong": "Forte",
+          "super": "Max"
+        }
+      },
+      "room_device_water_level": {
+        "name": "Livello dell'acqua",
+        "state": {
+          "low": "Basso",
+          "middle": "Medio",
+          "high": "Alto"
+        }
       }
     },
     "number": {
@@ -290,6 +320,9 @@
       },
       "voice_volume": {
         "name": "Volume della voce"
+      },
+      "room_device_cleaning_passes": {
+        "name": "Passate di pulizia"
       }
     },
     "time": {
@@ -428,6 +461,19 @@
         "headers": {
           "name": "Intestazioni",
           "description": "Intestazioni aggiuntive facoltative."
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Opzioni",
+        "data": {
+          "room_devices": "Stanze come dispositivi"
+        },
+        "data_description": {
+          "room_devices": "Mostra le impostazioni di ogni stanza (aspirazione, livello dell'acqua, passaggi) come un dispositivo a sé, collegato al robot, invece che nella pagina del robot."
         }
       }
     }

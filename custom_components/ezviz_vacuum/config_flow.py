@@ -9,10 +9,13 @@ from typing import Any
 
 from homeassistant.config_entries import (
     SOURCE_REAUTH,
+    ConfigEntry,
     ConfigFlow,
     ConfigFlowResult,
+    OptionsFlow,
 )
 from homeassistant.const import CONF_PASSWORD, CONF_URL, CONF_USERNAME
+from homeassistant.core import callback
 from homeassistant.helpers import selector
 from pyezvizapi.exceptions import (
     EzvizAuthVerificationCode,
@@ -24,7 +27,7 @@ import voluptuous as vol
 
 from . import robot
 from .cloud import EU_URL, RUSSIA_URL, new_client, sign_in
-from .const import CONF_SERIAL, CONF_TOKEN, DOMAIN
+from .const import CONF_ROOM_DEVICES, CONF_SERIAL, CONF_TOKEN, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -76,6 +79,12 @@ class EzvizVacuumConfigFlow(ConfigFlow, domain=DOMAIN):
     """Sign in to an EZVIZ account and add one of its robots."""
 
     VERSION = 2
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
+        """Return the options flow."""
+        return EzvizVacuumOptionsFlow()
 
     def __init__(self) -> None:
         self._username = ""
@@ -263,3 +272,25 @@ class EzvizVacuumConfigFlow(ConfigFlow, domain=DOMAIN):
             for serial, payload in devices.items()
             if isinstance(payload, Mapping) and robot.is_robot(payload)
         }
+
+
+class EzvizVacuumOptionsFlow(OptionsFlow):
+    """Choose how the robot's entities are organised."""
+
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Show the options."""
+        if user_input is not None:
+            return self.async_create_entry(data=user_input)
+        return self.async_show_form(
+            step_id="init",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_ROOM_DEVICES,
+                        default=self.config_entry.options.get(CONF_ROOM_DEVICES, False),
+                    ): selector.BooleanSelector(),
+                }
+            ),
+        )

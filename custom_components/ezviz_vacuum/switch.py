@@ -11,13 +11,16 @@ from homeassistant.const import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .coordinator import EzvizVacuumCoordinator
-from .entity import RobotSettingEntity
+from .entity import RobotSettingEntity, reported
 from .settings import (
     CleanPlanSetting,
     FieldSetting,
+    FirstAvailableSetting,
+    FlagFieldSetting,
     RestPlanSetting,
     Setting,
     clean_plans,
+    do_not_disturb,
 )
 
 
@@ -62,7 +65,7 @@ SWITCHES: Final[tuple[RobotSwitchDescription, ...]] = (
         key="do_not_disturb",
         translation_key="do_not_disturb",
         icon="mdi:sleep",
-        setting=RestPlanSetting("enabled"),
+        setting=do_not_disturb("enabled"),
     ),
     RobotSwitchDescription(
         key="do_not_disturb_resume",
@@ -80,7 +83,15 @@ SWITCHES: Final[tuple[RobotSwitchDescription, ...]] = (
         key="carpet_boost",
         translation_key="carpet_boost",
         icon="mdi:fan-plus",
-        setting=FieldSetting("SweeperCleanTask", "CarpetCleanCfg", "turboClean"),
+        setting=FirstAvailableSetting(
+            (
+                FieldSetting("SweeperCleanTask", "CarpetCleanCfg", "turboClean"),
+                # RE4: the same option, stored as a 0/1 flag.
+                FlagFieldSetting(
+                    "SweeperCleanTask", "CarpetTurboCleanSwitch", "enabled"
+                ),
+            )
+        ),
     ),
     RobotSwitchDescription(
         key="carpet_extra_clean",
@@ -154,7 +165,9 @@ async def async_setup_entry(
     """Set up the robot setting switches."""
     coordinator = entry.runtime_data
     entities: list[SwitchEntity] = [
-        RobotSettingSwitch(coordinator, description) for description in SWITCHES
+        RobotSettingSwitch(coordinator, description)
+        for description in SWITCHES
+        if reported(coordinator, description.setting)
     ]
     # Schedules are read once; reload the integration after adding one.
     for plan in clean_plans(coordinator.data.get("device")):

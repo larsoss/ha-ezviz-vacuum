@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, replace
 from typing import Any, Final
 
 from homeassistant.components.number import (
@@ -16,7 +17,14 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import robot
 from .coordinator import EzvizVacuumCoordinator
-from .entity import RobotSettingEntity
+from .entity import (
+    RobotSettingEntity,
+    reported,
+    room_device_info,
+    room_devices,
+    room_id_of,
+    sync_room_entities,
+)
 from .settings import (
     FieldSetting,
     MapCleanSetting,
@@ -91,13 +99,19 @@ NUMBERS: Final[tuple[RobotNumberDescription, ...]] = (
 
 
 def room_numbers(
-    device: Any, task: Any
+    device: Any,
+    task: Any,
+    language: str | None = "en",
+    names: Mapping[int, str] | None = None,
+    generic: frozenset[int] = frozenset(),
 ) -> list[tuple[str, RobotNumberDescription, str]]:
     """Return ``(key, description, room name)`` for per-room passes."""
     map_id = robot.active_map_id(device, task)
     configured = {
         str(room.get("roomID")) for room in robot.room_clean_configs(device, map_id)
     }
+    on_map = robot.setting_rooms(device, map_id, language, names)
+    room_ids = tuple(int(room_id) for room_id, _ in on_map if room_id in configured)
     return [
         (
             f"room_{room_id}_cleaning_passes",
@@ -107,11 +121,13 @@ def room_numbers(
                 icon="mdi:repeat",
                 native_min_value=1,
                 native_max_value=MAX_PASSES,
-                setting=RoomCleanSetting(int(room_id), "cleanTimes"),
+                setting=RoomCleanSetting(int(room_id), "cleanTimes", room_ids),
+                # Rooms the app named "Room N" itself are often not real rooms.
+                entity_registry_enabled_default=int(room_id) not in generic,
             ),
             name,
         )
-        for room_id, name in robot.rooms(device, map_id)
+        for room_id, name in on_map
         if room_id in configured
     ]
 
@@ -126,13 +142,50 @@ async def async_setup_entry(
     entities = [
         RobotSettingNumber(coordinator, description.key, description)
         for description in NUMBERS
+        if reported(coordinator, description.setting)
     ]
-    entities.extend(
-        RobotSettingNumber(coordinator, key, description, {"room": name})
-        for key, description, name in room_numbers(
-            coordinator.data.get("device"), coordinator.data.get("task")
-        )
+    device = coordinator.data.get("device")
+    task = coordinator.data.get("task")
+    rooms = room_numbers(
+        device,
+        task,
+        hass.config.language,
+        coordinator.room_names,
+        coordinator.room_generic,
     )
+    serial = coordinator.data["serial"]
+    sync_room_entities(
+        hass,
+        entry,
+        "number",
+        enable={
+            f"{serial}_{key}"
+            for key, description, _ in rooms
+            if description.entity_registry_enabled_default
+        },
+    )
+    as_devices = room_devices(entry)
+    for key, description, name in rooms:
+        if not as_devices:
+            entities.append(
+                RobotSettingNumber(coordinator, key, description, {"room": name})
+            )
+            continue
+        # On the room's own device the room name is already in the device name.
+        entity = RobotSettingNumber(
+            coordinator,
+            key,
+            replace(
+                description,
+                translation_key=description.translation_key.replace(
+                    "room_", "room_device_", 1
+                ),
+            ),
+        )
+        entity._attr_device_info = room_device_info(
+            hass, entry, coordinator, room_id_of(key), name
+        )
+        entities.append(entity)
     async_add_entities(entities)
 
 

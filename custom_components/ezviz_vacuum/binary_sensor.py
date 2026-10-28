@@ -30,7 +30,7 @@ BINARY_SENSORS: Final[tuple[RobotBinarySensorDescription, ...]] = (
         key="on_base_station",
         translation_key="on_base_station",
         icon="mdi:home-import-outline",
-        value_fn=lambda data: robot.task_data(data.get("task")).get("isOnBasestation"),
+        value_fn=lambda data: robot.on_base_station(data.get("task")),
     ),
     RobotBinarySensorDescription(
         key="do_not_disturb_active",
@@ -70,4 +70,10 @@ class RobotBinarySensor(RobotEntity, BinarySensorEntity):
     def is_on(self) -> bool | None:
         """Return the reported value."""
         value = self.entity_description.value_fn(self.coordinator.data)
-        return value if isinstance(value, bool) else None
+        if isinstance(value, bool):
+            return value
+        # Some models report these flags as 0/1 integers rather than JSON
+        # booleans (e.g. the RE4's isOnBasestation), so coerce numerics too.
+        if isinstance(value, (int, float)):
+            return bool(value)
+        return None

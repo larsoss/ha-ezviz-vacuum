@@ -156,6 +156,16 @@
       "current_task": {
         "name": "Tâche en cours"
       },
+      "charging_status": {
+        "name": "État de charge",
+        "state": {
+          "waiting_charge": "En attente de charge",
+          "charging": "En charge"
+        }
+      },
+      "last_event": {
+        "name": "Dernier événement"
+      },
       "task_duration": {
         "name": "Durée de la tâche"
       },
@@ -164,6 +174,9 @@
       },
       "last_error": {
         "name": "Dernière erreur"
+      },
+      "last_error_time": {
+        "name": "Heure de la dernière erreur"
       },
       "last_clean_area": {
         "name": "Surface du dernier nettoyage"
@@ -270,6 +283,23 @@
           "time": "Après l'intervalle",
           "region": "Après chaque pièce"
         }
+      },
+      "room_device_suction": {
+        "name": "Aspiration",
+        "state": {
+          "quiet": "Silencieux",
+          "normal": "Normal",
+          "strong": "Fort",
+          "super": "Max"
+        }
+      },
+      "room_device_water_level": {
+        "name": "Niveau d'eau",
+        "state": {
+          "low": "Faible",
+          "middle": "Moyen",
+          "high": "Élevé"
+        }
       }
     },
     "number": {
@@ -290,6 +320,9 @@
       },
       "voice_volume": {
         "name": "Volume de la voix"
+      },
+      "room_device_cleaning_passes": {
+        "name": "Passages de nettoyage"
       }
     },
     "time": {
@@ -428,6 +461,19 @@
         "headers": {
           "name": "En-têtes",
           "description": "En-têtes supplémentaires facultatifs."
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Options",
+        "data": {
+          "room_devices": "Pièces comme appareils"
+        },
+        "data_description": {
+          "room_devices": "Afficher les réglages de chaque pièce (aspiration, niveau d'eau, passages) comme un appareil distinct, lié au robot, au lieu de la page du robot."
         }
       }
     }

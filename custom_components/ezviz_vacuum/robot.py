@@ -3,30 +3,56 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from datetime import datetime
 from functools import lru_cache
+import json
 import re
 from typing import Any
 
 from .api import EzvizVacuumApi
 from .const import CLEAN_MODES
 from .helpers import feature, robot_features
+from .room_names import ROOM_NAMES_BY_LANGUAGE
 
-# Preset room names are stored by the robot as pinyin codes.
-ROOM_NAMES = {
-    "#@ChuF#": "Kitchen",
-    "#@KeT#": "Living Room",
-    "#@WoS#": "Bedroom",
-    "#@ZhuW#": "Master Bedroom",
-    "#@CiW#": "Guest Bedroom",
-    "#@ErTF#": "Kids Room",
-    "#@XuanG#": "Entrance",
-    "#@WeiYJ#": "Bathroom",
-    "#@ZouL#": "Hallway",
-    "#@CanT#": "Dining Room",
-    "#@ShuF#": "Study",
-    "#@YangT#": "Balcony",
-    "#@YiMJ#": "Closet",
+# Preset rooms are stored by the robot as codes such as ``#@KeT#``; their
+# names come from the EZVIZ app, in the languages the app supports.
+_ROOM_WORD = "#@FangJ#"
+# Home Assistant language codes that differ from the app's.
+_LANGUAGE_ALIASES = {
+    "zh-hans": "zh",
+    "zh-cn": "zh",
+    "zh-tw": "zh-Hant",
+    "zh-hk": "zh-Hant",
+    "no": "nb",
 }
+
+# English names, kept for callers that do not pass a language.
+ROOM_NAMES = ROOM_NAMES_BY_LANGUAGE["en"]
+
+
+def _room_names(language: str | None) -> dict[str, str]:
+    """Return the app's room names for a Home Assistant language."""
+    code = str(language or "en").replace("_", "-")
+    lowered = code.lower()
+    if lowered in _LANGUAGE_ALIASES:
+        return ROOM_NAMES_BY_LANGUAGE[_LANGUAGE_ALIASES[lowered]]
+    for candidate in (code, code.split("-")[0].lower()):
+        for name, names in ROOM_NAMES_BY_LANGUAGE.items():
+            if name.lower() == candidate.lower():
+                return names
+    return ROOM_NAMES
+
+
+def _preset(code: str, language: str | None) -> str | None:
+    return _room_names(language).get(code) or ROOM_NAMES.get(code)
+
+
+def _unnamed(room_id: Any, language: str | None) -> str:
+    return f"{_preset(_ROOM_WORD, language)} {room_id}"
+
+
+# A preset code, optionally with a trailing index (e.g. "#@FangJ#4").
+_PRESET_NAME = re.compile(r"^(#@\w+#)(\d*)$")
 
 
 def task_data(task: Mapping[str, Any] | None) -> Mapping[str, Any]:
@@ -119,28 +145,61 @@ def map_name(device: Mapping[str, Any] | None, map_id: int | None) -> str:
     return f"Map {map_id}" if map_id is not None else "Map"
 
 
-def room_name(raw_name: Any, room_id: Any) -> str:
-    """Translate a robot room name; preset codes become English names."""
+def room_name(raw_name: Any, room_id: Any, language: str | None = "en") -> str:
+    """Translate a robot room name into a readable name.
+
+    Rooms are named by a preset code (``#@CanT#`` -> Dining Room), a preset
+    code with a trailing index (``#@FangJ#4`` -> Room 4), or free text the
+    user typed in the app (returned as-is). Preset codes are translated into
+    ``language`` (English, German, Spanish, French, Italian, Dutch or Polish;
+    other languages get English). An unknown preset code falls back to
+    ``Room N`` rather than surfacing the raw ``#@...#`` wrapper.
+    """
     name = str(raw_name or "").strip()
     if not name:
-        return f"Room {room_id}"
-    return ROOM_NAMES.get(name, name)
+        return _unnamed(room_id, language)
+    if (preset := _preset(name, language)) is not None:
+        return preset
+    match = _PRESET_NAME.match(name)
+    if match:
+        base, index = _preset(match.group(1), language), match.group(2)
+        if base:
+            return f"{base} {index}" if index else base
+        return _unnamed(index or room_id, language)
+    return name
 
 
 def rooms(
-    device: Mapping[str, Any] | None, map_id: int | None
+    device: Mapping[str, Any] | None,
+    map_id: int | None,
+    language: str | None = "en",
 ) -> list[tuple[str, str]]:
     """Return ``(room_id, name)`` for the rooms of ``map_id``."""
     info = feature(device, "SweeperMapMgr", "RegionBasicInfo")
     for item in _as_list(info.get("mapList") if isinstance(info, Mapping) else None):
         if not isinstance(item, Mapping) or _map_id(item.get("mapID")) != map_id:
             continue
-        return [
-            (str(region["ID"]), room_name(region.get("name"), region["ID"]))
+        found = [
+            (str(region["ID"]), room_name(region.get("name"), region["ID"], language))
             for region in _as_list(item.get("regionList"))
             if isinstance(region, Mapping)
             and region.get("regionType") == "room"
             and region.get("ID") is not None
+        ]
+        if found:
+            return found
+    # Fallback: some models (e.g. the RE4 / CS-RE4P-PWT) don't report
+    # RegionBasicInfo at all — their rooms live in RoomCustomCleanCfg instead,
+    # keyed `roomID`. No name is carried there, so room_name() falls back to
+    # "Room N". The RoomBasicProperty feature holds only a capability flag
+    # (a bare `true`), not the user-assigned names.
+    for item in _as_list(feature(device, "SweeperMapMgr", "RoomCustomCleanCfg")):
+        if not isinstance(item, Mapping) or _map_id(item.get("mapID")) != map_id:
+            continue
+        return [
+            (str(room["roomID"]), room_name(room.get("name"), room["roomID"], language))
+            for room in _as_list(item.get("room"))
+            if isinstance(room, Mapping) and room.get("roomID") is not None
         ]
     return []
 
@@ -157,6 +216,158 @@ def room_clean_configs(
                 if isinstance(room, Mapping)
             ]
     return []
+
+
+def _float(value: Any) -> float | None:
+    if isinstance(value, bool):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+# App message codes that report a normal event instead of a fault.
+NOTICE_CODES = frozenset({30084})
+# Messages that open the clean log are notices too (RE4: CleanLog, RS20: LogPage).
+_LOG_PAGES = ("CleanLog", "LogPage")
+
+
+def _link_entry(link: Any) -> str | None:
+    """Return the page a message links to (``detailLink`` is a JSON string)."""
+    try:
+        value = json.loads(link) if isinstance(link, str) else link
+    except ValueError:
+        return None
+    entry = value.get("entry") if isinstance(value, Mapping) else None
+    return entry if isinstance(entry, str) else None
+
+
+def events(messages: Any) -> list[dict[str, Any]]:
+    """Return the app's events, newest first, in a simple shape.
+
+    The cloud puts the device name in front of the text (``RobbyCleaning
+    completed``); it is left out here.
+    """
+    found: list[tuple[float, dict[str, Any]]] = []
+    for message in _as_list(messages):
+        if not isinstance(message, Mapping):
+            continue
+        text = str(message.get("title") or "").strip()
+        sender = str(message.get("from") or "").strip()
+        if sender and text.startswith(sender):
+            text = text[len(sender) :].strip()
+        if not text:
+            continue
+        millis = _float(message.get("time"))
+        extra = message.get("ext")
+        code = extra.get("alarmType") if isinstance(extra, Mapping) else None
+        found.append(
+            (
+                millis or 0.0,
+                {
+                    "text": text,
+                    # The time as the app shows it, in the robot's own time zone.
+                    "time": message.get("timeStr"),
+                    "code": code,
+                    "type": message.get("subType"),
+                    "id": message.get("msgId"),
+                    # A finished clean is a notice, not the cause of an error.
+                    "notice": code in NOTICE_CODES
+                    or _link_entry(message.get("detailLink"))
+                    in ("CleanLog", "LogPage"),
+                },
+            )
+        )
+    found.sort(key=lambda item: item[0], reverse=True)
+    return [event for _, event in found]
+
+
+def _clock(value: Any) -> datetime | None:
+    """Parse a time the robot or the cloud gives in the robot's own time zone."""
+    text = str(value or "").strip().replace("T", " ")
+    try:
+        return datetime.fromisoformat(text).replace(tzinfo=None)
+    except ValueError:
+        return None
+
+
+def event_for_error(
+    error: Mapping[str, Any] | None,
+    found: list[dict[str, Any]] | None,
+    window: float = 180,
+    earlier: float | None = None,
+) -> dict[str, Any] | None:
+    """Return the app message that belongs to a robot error.
+
+    The live task only has a code such as ``0xe0010025``; the app sends a
+    message with the explanation a few seconds later ("The wheel is
+    suspended..."). Both carry the robot's own clock, so they are matched on
+    time: the fault message closest to the error within ``window`` seconds.
+
+    An error that was already active when the integration started has no
+    known start; with ``earlier`` (seconds) the newest fault message before it
+    is used instead.
+    """
+    when = _clock(error.get("robot_time")) if error else None
+    if when is None:
+        return None
+    best: dict[str, Any] | None = None
+    best_gap: float | None = None
+    newest: dict[str, Any] | None = None
+    newest_at: datetime | None = None
+    for event in found or []:
+        at = _clock(event.get("time"))
+        if at is None or event.get("notice"):
+            continue
+        gap = abs((at - when).total_seconds())
+        if gap <= window and (best_gap is None or gap < best_gap):
+            best, best_gap = event, gap
+        before = (when - at).total_seconds()
+        if (
+            earlier is not None
+            and -window <= before <= earlier
+            and (newest_at is None or at > newest_at)
+        ):
+            newest, newest_at = event, at
+    return best or newest
+
+
+def is_generic_room_name(raw_name: Any) -> bool:
+    """Return whether a room still has the app's default name ("Room 13").
+
+    The app creates such rooms itself, for example when it splits or merges
+    rooms, and they are often not real rooms.
+    """
+    name = str(raw_name or "").strip()
+    if not name:
+        return True
+    match = _PRESET_NAME.match(name)
+    return bool(match) and match.group(1) == _ROOM_WORD
+
+
+def setting_rooms(
+    device: Mapping[str, Any] | None,
+    map_id: int | None,
+    language: str | None = "en",
+    names: Mapping[int, str] | None = None,
+) -> list[tuple[str, str]]:
+    """Return ``(room_id, name)`` for the rooms that get per-room settings.
+
+    ``names`` are the room names of the map itself (id -> name). The robot's
+    room cleaning settings can still list rooms that were merged or deleted
+    in the app, and carry no names; with the map's names only the rooms that
+    exist on the map and have a name there are kept, under that name.
+    """
+    found = rooms(device, map_id, language)
+    if not names:
+        return found
+    named = [
+        (room_id, names[int(room_id)])
+        for room_id, _ in found
+        if str(room_id).isdigit() and int(room_id) in names
+    ]
+    return named or found
 
 
 def clean_mode(device: Mapping[str, Any] | None) -> str | None:
@@ -289,6 +500,65 @@ def task_paused(task: Mapping[str, Any] | None) -> bool:
     return False
 
 
+_CAMEL_BOUNDARY = re.compile(r"(?<!^)(?=[A-Z])")
+
+
+def charging_status(task: Mapping[str, Any] | None) -> str | None:
+    """Return the charging state of the live task, e.g. ``waiting_charge``.
+
+    The task is named ``charging`` as soon as the robot is on its dock, also
+    while it waits for the off-peak hours: ``inCharging`` is then 0 and
+    ``chargingTaskInfo.status`` is ``waitingCharge``.
+    """
+    info = task_data(task).get("chargingTaskInfo")
+    status = info.get("status") if isinstance(info, Mapping) else None
+    if not isinstance(status, str) or not status.strip():
+        return None
+    return _CAMEL_BOUNDARY.sub("_", status.strip()).lower()
+
+
+def _flag(value: Any) -> bool | None:
+    """Read a yes/no value that some models report as 0/1."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    return None
+
+
+def display_task(task: Mapping[str, Any] | None) -> str:
+    """Return the task name as it should be shown.
+
+    A docked RE4 is on the ``charging`` task even while it waits for the
+    off-peak hours; it is then shown as ``waiting_charge``, like the charging
+    status, because it is not charging.
+    """
+    name = current_task(task)
+    if name.replace("_", "").casefold() == "charging" and (
+        charging_status(task) == "waiting_charge"
+    ):
+        return "waiting_charge"
+    return name
+
+
+def on_base_station(task: Mapping[str, Any] | None) -> bool | None:
+    """Return whether the robot is on its base station.
+
+    The RE4 reports ``isOnBasestation`` as 0 while it sits on the dock, so a
+    task that only happens on the dock (charging, washing, drying, ...) counts
+    as being on the station as well.
+    """
+    flag = _flag(task_data(task).get("isOnBasestation"))
+    if flag:
+        return True
+    name = current_task(task).replace("_", "").casefold()
+    if "charg" in name and not any(word in name for word in _RETURN_WORDS):
+        return True
+    if any(word in name for word in _STATION_WORDS):
+        return True
+    return flag
+
+
 def activity(
     task: Mapping[str, Any] | None, device: Mapping[str, Any] | None = None
 ) -> str:
@@ -297,7 +567,7 @@ def activity(
         return ACTIVITY_ERROR
     data = task_data(task)
     name = current_task(task).replace("_", "").casefold()
-    on_station = data.get("isOnBasestation") is True
+    on_station = _flag(data.get("isOnBasestation")) is True
 
     if "pause" in name or "suspend" in name or task_paused(task):
         return ACTIVITY_PAUSED
@@ -335,6 +605,8 @@ ERROR_CODES: dict[str, str] = {
     "413": "Docking failed (did not start from the station)",
     "414": "Leaving the station is blocked",
     "CR_CleanWaterBoxLow": "Clean water tank is low",
+    # RE4: reported 3 seconds before the app's "wheel is suspended" message.
+    "0xe0010025": "The wheel is suspended, put the robot on the ground",
 }
 _CHINESE_ERRORS: dict[str, str] = {
     "拖布盘安装失败": "201",
@@ -434,4 +706,50 @@ def last_clean(device: Mapping[str, Any] | None) -> dict[str, Any] | None:
         "started_by": entry.get("startType"),
         "stop_reason": entry.get("stopType"),
         "map_id": entry.get("mapID"),
+    }
+
+
+def clean_statistic(log: Mapping[str, Any] | None) -> Mapping[str, Any]:
+    """Return the lifetime totals of the cloud clean log."""
+    stat = log.get("statistic") if isinstance(log, Mapping) else None
+    return stat if isinstance(stat, Mapping) else {}
+
+
+def _started(entry: Mapping[str, Any]) -> tuple[float, int]:
+    """Sort key of a clean log entry: start time, then id."""
+    try:
+        stamp = datetime.fromisoformat(str(entry.get("startTime"))).timestamp()
+    except ValueError:
+        stamp = 0.0
+    identifier = entry.get("id")
+    return stamp, identifier if isinstance(identifier, int) else 0
+
+
+def last_clean_from_log(log: Mapping[str, Any] | None) -> dict[str, Any] | None:
+    """Return the newest clean of the cloud clean log, like ``last_clean``.
+
+    Used for robots that keep no cleaning history on the robot (RE4).
+    """
+    entries = [
+        item
+        for item in _as_list(log.get("list") if isinstance(log, Mapping) else None)
+        if isinstance(item, Mapping)
+    ]
+    if not entries:
+        return None
+    entry = max(entries, key=_started)
+    area = entry.get("cleanArea")
+    seconds = entry.get("cleanDuration")
+    return {
+        "area": area if isinstance(area, (int, float)) else None,
+        "duration_minutes": round(seconds / 60)
+        if isinstance(seconds, (int, float))
+        else None,
+        "start": entry.get("startTime"),
+        "end": None,
+        "cleaning_mode": entry.get("cleanMode"),
+        "cleaning_range": entry.get("cleanRange"),
+        "started_by": entry.get("startType"),
+        "stop_reason": entry.get("stopType"),
+        "map_id": None,
     }

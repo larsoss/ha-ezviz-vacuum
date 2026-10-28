@@ -7,10 +7,37 @@ from collections.abc import Callable
 import gzip
 from importlib import metadata
 import json
+import logging
 from typing import Any
 import zlib
 
-from .const import CLEAN_MODES, SETTING_ACTIONS, WRITABLE_FEATURES
+from .const import (
+    CLEAN_MODES,
+    ROOM_SETTING_ACTIONS,
+    SETTING_ACTIONS,
+    WRITABLE_FEATURES,
+)
+
+
+def language_headers(language: str | None) -> dict[str, str] | None:
+    """Return the headers that make the cloud answer in ``language``.
+
+    The session's default headers ask for English (``language: en_GB``,
+    ``lang: en``); the app sends its own language in all three.
+    """
+    if not language:
+        return None
+    code = language.replace("_", "-")
+    base, _, region = code.partition("-")
+    base = base.lower()
+    region = (region or {"en": "GB", "zh": "CN"}.get(base, base)).upper()
+    if region == "HANT":
+        region = "TW"
+    return {
+        "language": f"{base}_{region}",
+        "lang": base,
+        "Accept-Language": f"{base}-{region},{base};q=0.9",
+    }
 
 
 class EzvizVacuumApiError(Exception):
@@ -49,6 +76,8 @@ def rejection_reason(result: dict[str, Any], code: Any) -> str:
 
 
 # Map layer -> key of the layer in the cloud response.
+_LOGGER = logging.getLogger(__name__)
+
 MAP_LAYERS = {
     "map": "sweepRuleMapVo",
     "region": "sweepRuleRegionVo",
@@ -70,6 +99,7 @@ class EzvizVacuumApi:
         group: str,
         primary: Callable[[], dict[str, Any]],
         alternative: Callable[[], dict[str, Any]],
+        retry_on: type[EzvizVacuumApiError] = UnknownActionError,
     ) -> dict[str, Any]:
         """Run ``primary``; fall back for models that name the command differently.
 
@@ -81,7 +111,7 @@ class EzvizVacuumApi:
             return alternative()
         try:
             return primary()
-        except UnknownActionError:
+        except retry_on:
             result = alternative()
             self._alternatives.add(key)
             return result
@@ -99,23 +129,27 @@ class EzvizVacuumApi:
     def clean_control(self, serial: str, command: str) -> dict[str, Any]:
         """Start, resume, pause or stop cleaning.
 
-        Most models use ``CleanControl``; the RS2 made by EZVIZ's manufacturer
-        calls it ``CleanCtrl`` with the same values.
+        Most models use ``CleanControl`` with the bare command string; the RS2
+        and RE4 made by EZVIZ's manufacturer use ``CleanCtrl`` with an object
+        payload instead (the same shape as ``RechargeCtrl``).
         """
         if command not in {"start", "resume", "pause", "stop"}:
             raise ValueError(f"Unsupported robot command: {command}")
 
-        def send(identifier: str) -> dict[str, Any]:
+        def send(identifier: str, payload: Any) -> dict[str, Any]:
             return self._iot_request(
                 serial,
                 endpoint="action",
                 domain="SweeperCleanTask",
                 identifier=identifier,
-                payload=command,
+                payload=payload,
             )
 
         return self._with_alternative(
-            serial, "clean", lambda: send("CleanControl"), lambda: send("CleanCtrl")
+            serial,
+            "clean",
+            lambda: send("CleanControl", command),
+            lambda: send("CleanCtrl", {"action": command, "source": "mobile"}),
         )
 
     def recharge_control(self, serial: str, command: str) -> dict[str, Any]:
@@ -210,11 +244,19 @@ class EzvizVacuumApi:
 
         if fallback is None:
             return send((domain, action, payload))
+        # The two room-settings actions are named differently per model and a
+        # model that lacks one may refuse it with a plain failure.
+        retry_on = (
+            EzvizVacuumApiError
+            if action in ROOM_SETTING_ACTIONS
+            else UnknownActionError
+        )
         return self._with_alternative(
             serial,
             f"setting:{domain}/{action}",
             lambda: send((domain, action, payload)),
             lambda: send(fallback),
+            retry_on=retry_on,
         )
 
     def start_region_clean(
@@ -290,6 +332,65 @@ class EzvizVacuumApi:
             raise EzvizVacuumApiError(f"map/{layer}: {rejection_reason(result, code)}")
         value = result.get(MAP_LAYERS[layer])
         return value if isinstance(value, dict) else {}
+
+    def fetch_messages(
+        self, serial: str, day: str, language: str | None = None
+    ) -> list[dict[str, Any]]:
+        """Read the app's event list ("Events" tab) for one day (``YYYYMMDD``).
+
+        This is the message list of the EZVIZ app, with faults such as a stuck
+        brush and notices such as a finished clean; it only reads data. The
+        text comes in the language sent in ``language``.
+        """
+        response = self._cloud.request(
+            "GET",
+            "/v3/unifiedmsg/list",
+            params={
+                "serials": serial.upper(),
+                "stype": "92",
+                "limit": 50,
+                "date": day,
+                "endTime": "",
+            },
+            headers=language_headers(language),
+        )
+        response.raise_for_status()
+        result = response.json()
+        if not isinstance(result, dict):
+            raise EzvizVacuumApiError("EZVIZ returned an invalid event list")
+        meta = result.get("meta")
+        code = meta.get("code") if isinstance(meta, dict) else None
+        if code not in (None, 0, 200, "0", "200"):
+            raise EzvizVacuumApiError(
+                f"unifiedmsg/list: {rejection_reason(result, code)}"
+            )
+        messages = result.get("message")
+        if not isinstance(messages, list):
+            return []
+        return [message for message in messages if isinstance(message, dict)]
+
+    def fetch_clean_log(self, serial: str) -> dict[str, Any]:
+        """Read the cloud clean log: recent cleans and lifetime totals.
+
+        This is what the app's clean log page loads; it only reads data. The
+        answer has ``list`` (recent cleans) and ``statistic`` (``totalHour``,
+        ``totalArea``, ``totalCount``).
+        """
+        response = self._cloud.request(
+            "POST",
+            "/v3/sweeprobot/v3/rule/clean/list",
+            params={"deviceSerial": serial.upper()},
+        )
+        response.raise_for_status()
+        result = response.json()
+        if not isinstance(result, dict):
+            raise EzvizVacuumApiError("EZVIZ returned an invalid clean log")
+        meta = result.get("meta")
+        code = meta.get("code") if isinstance(meta, dict) else None
+        if code not in (None, 0, 200, "0", "200"):
+            raise EzvizVacuumApiError(f"clean/list: {rejection_reason(result, code)}")
+        data = result.get("data")
+        return data if isinstance(data, dict) else {}
 
     @staticmethod
     def decode_diagnostic_blob(blob: Any) -> Any:
@@ -406,15 +507,19 @@ class EzvizVacuumApi:
         identifier: str,
         payload: Any,
     ) -> dict[str, Any]:
+        body = json.dumps(payload, separators=(",", ":"))
+        _LOGGER.debug("Robot %s %s/%s: %s", endpoint, domain, identifier, body)
         response = self._cloud.request(
             "PUT",
             f"/v3/iot-feature/{endpoint}/"
             f"{serial.upper()}/SweepingRobot/0/{domain}/{identifier}",
-            data=json.dumps(payload, separators=(",", ":")),
+            data=body,
             headers={"Content-Type": "application/json"},
         )
         response.raise_for_status()
         result = response.json()
+        if identifier != "QueryCurrentTask":
+            _LOGGER.debug("Robot %s/%s answered: %s", domain, identifier, result)
         if not isinstance(result, dict):
             raise EzvizVacuumApiError("EZVIZ returned an invalid response")
 

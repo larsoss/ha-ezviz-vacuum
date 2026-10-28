@@ -89,6 +89,34 @@ class OutlineTests(unittest.TestCase):
         self.assertEqual(layers.robot_degree, -174.0)
 
 
+class PathScaleTests(unittest.TestCase):
+    """The path is scaled only when it uses the finer coordinates."""
+
+    grid = mapdata.Grid(880, 1054, 278, 191)
+
+    def test_grid_coordinates_are_kept(self) -> None:
+        # RS20: path points already lie on the map.
+        path = [[(900.0, 1100.0), (1000.0, 1150.0)]]
+        self.assertEqual(mapdata.fit_path(path, self.grid), path)
+
+    def test_fine_coordinates_are_scaled(self) -> None:
+        # RE4: the same points stored ten times larger.
+        path = [[(9000.0, 11000.0), (10000.0, 11500.0)]]
+        self.assertEqual(
+            mapdata.fit_path(path, self.grid), [[(900.0, 1100.0), (1000.0, 1150.0)]]
+        )
+
+    def test_without_grid_nothing_changes(self) -> None:
+        path = [[(9000.0, 11000.0)]]
+        self.assertEqual(mapdata.fit_path(path, None), path)
+
+    def test_room_names_from_region_layer(self) -> None:
+        names = mapdata.decode_room_names(
+            {"room": [{"roomID": 8, "roomName": " #@WoS# "}, {"roomID": 9}]}
+        )
+        self.assertEqual(names, {8: "#@WoS#"})
+
+
 class RenderTests(unittest.TestCase):
     """The SVG contains every layer."""
 

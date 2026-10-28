@@ -43,6 +43,50 @@ class FieldSettingTests(unittest.TestCase):
         self.assertFalse(setting.available(fixtures.device()))
 
 
+class CarpetBoostTests(unittest.TestCase):
+    """Carpet boost lives in CarpetCleanCfg (RS20) or CarpetTurboCleanSwitch (RE4)."""
+
+    setting = settings.FirstAvailableSetting(
+        (
+            settings.FieldSetting("SweeperCleanTask", "CarpetCleanCfg", "turboClean"),
+            settings.FlagFieldSetting(
+                "SweeperCleanTask", "CarpetTurboCleanSwitch", "enabled"
+            ),
+        )
+    )
+
+    @staticmethod
+    def re4(enabled: int) -> dict:
+        return {
+            "FEATURE_INFO": {
+                "0": {
+                    "SweepingRobot": {
+                        "SweeperCleanTask": {
+                            "CarpetTurboCleanSwitch": {"enabled": enabled}
+                        }
+                    }
+                }
+            }
+        }
+
+    def test_rs20_uses_carpet_clean_cfg(self) -> None:
+        self.assertIs(self.setting.read(fixtures.device()), True)
+        domain, identifier, _ = self.setting.write(fixtures.device(), None, False)
+        self.assertEqual(identifier, "CarpetCleanCfg")
+
+    def test_re4_reads_flag_and_writes_boolean(self) -> None:
+        self.assertIs(self.setting.read(self.re4(1)), True)
+        self.assertIs(self.setting.read(self.re4(0)), False)
+        domain, identifier, payload = self.setting.write(self.re4(1), None, False)
+        self.assertEqual(
+            (domain, identifier), ("SweeperCleanTask", "CarpetTurboCleanSwitch")
+        )
+        self.assertEqual(payload, {"enabled": False})
+
+    def test_unavailable_without_either(self) -> None:
+        self.assertFalse(self.setting.available({}))
+
+
 class ScalarSettingTests(unittest.TestCase):
     """Plain values are sent as they are."""
 
@@ -113,6 +157,41 @@ class ActionTests(unittest.TestCase):
                     "cleanTimes": 1,
                 },
             ),
+        )
+
+    def test_room_setting_leaves_out_fields_the_robot_lacks(self) -> None:
+        # RE4: rooms carry no cleanTimes; the app does not send one either.
+        device = {
+            "FEATURE_INFO": {
+                "0": {
+                    "SweepingRobot": {
+                        "SweeperMapMgr": {
+                            "RoomCustomCleanCfg": [
+                                {
+                                    "mapID": 2,
+                                    "room": [
+                                        {
+                                            "roomID": 3,
+                                            "fanMode": "normal",
+                                            "waterQuantity": "middle",
+                                            "order": -1,
+                                        }
+                                    ],
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        }
+        task = {"data": {"currentMapID": 2}}
+        # A robot without a region list sends every room at once; the single
+        # room form is its fallback.
+        self.assertEqual(
+            settings.RoomCleanSetting(3, "fanMode").fallback_action(
+                device, task, "strong"
+            )[2],
+            {"mapID": 2, "roomID": 3, "fanMode": "strong", "waterQuantity": "middle"},
         )
 
     def test_global_clean_cfg_fallback_for_re7(self) -> None:
@@ -215,6 +294,42 @@ class RestPlanSettingTests(unittest.TestCase):
         self.assertEqual(payload["plan"][0]["ID"], 0)
 
 
+class DoNotDisturbTests(unittest.TestCase):
+    """Do not disturb lives in RestPlan (RS20) or RestMode (RE4)."""
+
+    re4 = {
+        "FEATURE_INFO": {
+            "0": {
+                "SweepingRobot": {
+                    "SweeperMgr": {
+                        "RestMode": {
+                            "startTime": "22:00:00",
+                            "endTime": "07:00:00",
+                            "enabled": True,
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    def test_rs20_uses_rest_plan(self) -> None:
+        setting = settings.do_not_disturb("enabled")
+        _, identifier, _ = setting.write(fixtures.device(), None, False)
+        self.assertEqual(identifier, "RestPlan")
+
+    def test_re4_uses_rest_mode(self) -> None:
+        self.assertIs(settings.do_not_disturb("enabled").read(self.re4), True)
+        self.assertEqual(settings.do_not_disturb("endTime").read(self.re4), "07:00:00")
+        domain, identifier, payload = settings.do_not_disturb("startTime").write(
+            self.re4, None, "23:00:00"
+        )
+        self.assertEqual((domain, identifier), ("SweeperMgr", "RestMode"))
+        self.assertEqual(
+            payload, {"startTime": "23:00:00", "endTime": "07:00:00", "enabled": True}
+        )
+
+
 class CleanPlanSettingTests(unittest.TestCase):
     """Schedules are changed one at a time."""
 
@@ -263,6 +378,108 @@ class ApplyWriteTests(unittest.TestCase):
         self.assertNotIn(
             ("SweeperMgr", "CliffDetectionSwitch"), const.WRITABLE_FEATURES
         )
+
+
+class RoomBatchTests(unittest.TestCase):
+    """The RE4 app changes all rooms of the map in one call."""
+
+    @staticmethod
+    def _re4() -> dict:
+        # Rooms 4, 6 and 7 are left over in the settings but not on the map.
+        rooms = [
+            {
+                "fanMode": "normal",
+                "cleanTimes": 1,
+                "regionType": "room",
+                "waterQuantity": "middle",
+                "roomID": room_id,
+                "order": -1,
+            }
+            for room_id in (0, 1, 2, 3, 4, 5, 6, 7, 12)
+        ]
+        return {
+            "FEATURE_INFO": {
+                "0": {
+                    "SweepingRobot": {
+                        "SweeperMapMgr": {
+                            "RoomCustomCleanCfg": [{"mapID": 2, "room": rooms}]
+                        }
+                    }
+                }
+            }
+        }
+
+    TASK = {"data": {"currentMapID": 2}}
+    ON_MAP = (0, 1, 2, 3, 5, 12)
+
+    def test_batch_matches_what_the_app_sends(self) -> None:
+        domain, action, payload = settings.RoomCleanSetting(
+            3, "waterQuantity", self.ON_MAP
+        ).action(self._re4(), self.TASK, "dry")
+        self.assertEqual(
+            (domain, action), ("SweeperMapMgr", "ModifyRoomCustomCleanCfgBatch")
+        )
+        value = payload["value"]
+        self.assertEqual(value["mapID"], 2)
+        self.assertEqual(
+            [room["roomID"] for room in value["room"]], [0, 1, 2, 3, 5, 12]
+        )
+        self.assertEqual(
+            value["room"][3],
+            {
+                "regionType": "room",
+                "roomID": 3,
+                "customRegionID": 0,
+                "fanMode": "normal",
+                "waterQuantity": "dry",
+                "cleanTimes": 1,
+            },
+        )
+        # Only the changed room differs.
+        self.assertEqual(value["room"][0]["waterQuantity"], "middle")
+
+    def test_other_rooms_keep_their_values(self) -> None:
+        device = self._re4()
+        device["FEATURE_INFO"]["0"]["SweepingRobot"]["SweeperMapMgr"][
+            "RoomCustomCleanCfg"
+        ][0]["room"][8].update({"fanMode": "strong", "waterQuantity": "low"})
+        payload = settings.RoomCleanSetting(5, "fanMode", self.ON_MAP).action(
+            device, self.TASK, "quiet"
+        )[2]
+        by_id = {room["roomID"]: room for room in payload["value"]["room"]}
+        self.assertEqual(by_id[12]["fanMode"], "strong")
+        self.assertEqual(by_id[12]["waterQuantity"], "low")
+        self.assertEqual(by_id[5]["fanMode"], "quiet")
+
+    def test_without_the_room_list_every_configured_room_is_sent(self) -> None:
+        payload = settings.RoomCleanSetting(3, "fanMode").action(
+            self._re4(), self.TASK, "strong"
+        )[2]
+        self.assertEqual(len(payload["value"]["room"]), 9)
+
+    def test_single_room_form_is_the_fallback(self) -> None:
+        domain, action, payload = settings.RoomCleanSetting(
+            3, "fanMode", self.ON_MAP
+        ).fallback_action(self._re4(), self.TASK, "strong")
+        self.assertEqual((domain, action), ("SweeperMapMgr", "SetRoomCustomCleanCfg"))
+        self.assertEqual(payload["roomID"], 3)
+
+    def test_rs20_keeps_the_single_room_action(self) -> None:
+        device = fixtures.device()
+        setting = settings.RoomCleanSetting(8, "waterQuantity", (8, 9))
+        self.assertEqual(
+            setting.action(device, fixtures.task(), "high")[1], "SetRoomCustomCleanCfg"
+        )
+        self.assertEqual(
+            setting.fallback_action(device, fixtures.task(), "high")[1],
+            "ModifyRoomCustomCleanCfgBatch",
+        )
+
+    def test_unknown_room_is_rejected(self) -> None:
+        with self.assertRaises(ValueError):
+            settings.RoomCleanSetting(9, "fanMode", self.ON_MAP).action(
+                self._re4(), self.TASK, "strong"
+            )
 
 
 if __name__ == "__main__":
