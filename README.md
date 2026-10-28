@@ -51,7 +51,9 @@ supported too, but untested; see [Supported models](#supported-models).
 | RS20 Max | ✅ Tested | Firmware V2.0.2417. Everything in this README. |
 | RS20 Pro | 🟡 Untested | Same commands as the RS20 Max; very likely works fully. |
 | RS2 | 🟡 Untested | Same cleaning, docking, room and suction commands. No base-station or do-not-disturb settings. |
-| RE4, RE4C, RE4 Plus, RE4C Plus | 🟡 Untested | As the RS2. |
+| RE4 (CS-RE4P-PBT) | ✅ Tested by the community | Firmware V0.01.92, tested by @larsoss: cleaning, rooms, per-room settings, carpet boost, do not disturb, statistics and events. No base-station settings. |
+| RE4 (CS-RE4P-PWT) | 🟢 Partly tested | Tested by @RBrNx before 1.2.0: cleaning, rooms and the map. |
+| RE4C, RE4 Plus, RE4C Plus | 🟡 Untested | As the RE4. |
 | RE5, RE5 Plus, RE5S Plus | 🟡 Untested | As the RS2. |
 | RE7 Edge | 🟡 Untested | Suction and water use the RE7's own command, which the integration switches to automatically. No mop-washing or dust settings. |
 

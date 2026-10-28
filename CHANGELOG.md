@@ -1,5 +1,43 @@
 # Changelog
 
+## 1.2.0
+
+RE4 support and a lot of polish, found and tested on real RE4 robots by
+@RBrNx (#3, #4) and @larsoss (#5, #6, #7, #8). The beta sections below list
+each step.
+
+Robots
+- RE4: start, pause, stop and dock, room cleaning, carpet boost, do not
+  disturb and per-room suction, water and passes now work. The integration
+  detects each model's commands by itself and falls back when a robot refuses
+  one.
+- Lifetime totals (area, time, number of cleanings) and the last clean on
+  robots that do not report them themselves, from the cloud clean log.
+- The cleaning path is drawn at the right size on every robot; the scale is
+  detected from the map.
+
+Rooms
+- Room names match the EZVIZ app, in Home Assistant's language (about 30
+  languages). Some English names change, e.g. Hallway → Corridor; entity IDs
+  stay the same.
+- Per-room settings only for rooms that are on the map, under their map names.
+  Rooms the app still calls "Room N" are created disabled.
+- New option **Room devices**: each room's settings as a device of its own,
+  linked to the robot (Settings → Devices & services → EZVIZ Robot Vacuum →
+  Configure).
+
+New sensors
+- **Last event**: the newest message of the app's Events tab, in Home
+  Assistant's language.
+- **Last error** shows the app's own explanation; **Last error time** changes
+  with every new error.
+- **Charging status**: waiting to charge (off-peak) or charging.
+
+Other
+- Settings a robot does not have no longer appear as unavailable entities.
+- Dutch translation (@larsoss).
+- Debug logging shows each robot command and the robot's answer.
+
 ## 1.1.1b12 (beta)
 
 Changes since 1.1.1b10 (1.1.1b11 was not published).
